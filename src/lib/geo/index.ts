@@ -1,4 +1,7 @@
 export * from './bearing'
 export * from './calculator'
 export * from './course'
+export * from './library'
+export * from './position'
+export * from './sizing'
 export * from './units'
