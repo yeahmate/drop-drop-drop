@@ -1,16 +1,42 @@
 <script lang="ts">
-	import { DEFAULT_SPEC, type CourseSpec, type DistanceUnit } from './lib/geo'
+	import { DEFAULT_SPEC, type CourseSpec } from './lib/geo'
 	import { courseFromHash, shareUrl } from './lib/share'
+	import { deviceStorage, load, save } from './lib/store'
 	import AngleCalculator from './lib/ui/AngleCalculator.svelte'
+	import LayView from './lib/ui/LayView.svelte'
+	import LineView from './lib/ui/LineView.svelte'
 	import PlanView from './lib/ui/PlanView.svelte'
+	import WindView from './lib/ui/WindView.svelte'
 
-	type Tab = 'plan' | 'calculator'
+	const tabs = [
+		{ id: 'plan', name: 'Plan' },
+		{ id: 'lay', name: 'Lay' },
+		{ id: 'line', name: 'Line' },
+		{ id: 'wind', name: 'Wind' },
+		{ id: 'calc', name: 'Angles' },
+	] as const
+	type Tab = (typeof tabs)[number]['id']
 
-	let spec = $state<CourseSpec>(courseFromHash(location.hash) ?? { ...DEFAULT_SPEC, axis: 235 })
-	let unit = $state<DistanceUnit>('nm')
-	// #t=calc opens straight on the calculator, for a home-screen bookmark.
-	let tab = $state<Tab>(/[#&]t=calc/.test(location.hash) ? 'calculator' : 'plan')
+	const storage = deviceStorage()
+	const saved = load(storage)
+	// A shared link wins over whatever was last open on this device.
+	const linked = courseFromHash(location.hash)
+	const hashTab = /[#&]t=(\w+)/.exec(location.hash)?.[1]
+
+	let spec = $state<CourseSpec>(linked ?? saved.spec ?? { ...DEFAULT_SPEC, axis: 235 })
+	let unit = $state(saved.unit)
+	let refLat = $state(saved.refLat)
+	let refLon = $state(saved.refLon)
+	let wind = $state(saved.wind)
+	let laid = $state(linked ? {} : saved.laid)
+	let depth = $state(saved.depth)
+	let warp = $state(saved.warp)
+	let tab = $state<Tab>(tabs.find((t) => t.id === hashTab)?.id ?? (linked ? 'lay' : 'plan'))
 	let shared = $state('')
+
+	$effect(() => {
+		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp })
+	})
 
 	async function share() {
 		const url = shareUrl(spec, location.href)
@@ -27,8 +53,9 @@
 <header>
 	<h1>Drop Drop Drop</h1>
 	<nav aria-label="Tools">
-		<button type="button" aria-pressed={tab === 'plan'} onclick={() => (tab = 'plan')}>Plan</button>
-		<button type="button" aria-pressed={tab === 'calculator'} onclick={() => (tab = 'calculator')}>Angle calculator</button>
+		{#each tabs as t (t.id)}
+			<button type="button" aria-pressed={tab === t.id} onclick={() => (tab = t.id)}>{t.name}</button>
+		{/each}
 	</nav>
 	<span class="grow"></span>
 	<label class="unit">
@@ -44,7 +71,13 @@
 
 <main>
 	{#if tab === 'plan'}
-		<PlanView bind:spec {unit} />
+		<PlanView bind:spec {unit} bind:refLat bind:refLon />
+	{:else if tab === 'lay'}
+		<LayView {spec} {unit} bind:refLat bind:refLon bind:laid bind:depth bind:warp />
+	{:else if tab === 'line'}
+		<LineView {spec} {unit} />
+	{:else if tab === 'wind'}
+		<WindView bind:spec bind:wind />
 	{:else}
 		<div class="card">
 			<AngleCalculator bind:axis={spec.axis} bind:angle={spec.angle} />

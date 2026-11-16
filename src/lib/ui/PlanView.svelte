@@ -7,19 +7,19 @@
 	} from '../geo'
 	import CourseDiagram from './CourseDiagram.svelte'
 
-	let { spec = $bindable(), unit = 'nm' }: { spec: CourseSpec; unit?: DistanceUnit } = $props()
+	let {
+		spec = $bindable(), unit = 'nm', refLat = $bindable(''), refLon = $bindable(''),
+	}: { spec: CourseSpec; unit?: DistanceUnit; refLat?: string; refLon?: string } = $props()
 
 	let boatClass = $state(BOAT_CLASSES[0].name)
 	let fleet = $state(40)
 	let speed = $state(4)
-	let latText = $state('')
-	let lonText = $state('')
 
 	let course = $derived(buildCourse(spec))
 	let rows = $derived(layTable(course))
 	let minutes = $derived(estimatedMinutes(course.length, speed))
-	let lat = $derived(parseCoordinate(latText, 'lat'))
-	let lon = $derived(parseCoordinate(lonText, 'lon'))
+	let lat = $derived(parseCoordinate(refLat, 'lat'))
+	let lon = $derived(parseCoordinate(refLon, 'lon'))
 	let reference = $derived(lat.ok && lon.ok ? { lat: lat.value, lon: lon.value } : null)
 
 	// The beat is edited in the leading unit and stored in metres.
@@ -78,13 +78,13 @@
 			<div class="reference">
 				<label>
 					Reference latitude
-					<input type="text" placeholder="N 50° 35.212'" bind:value={latText} aria-invalid={latText !== '' && !lat.ok} />
-					{#if latText !== '' && !lat.ok}<span class="error">{lat.error}</span>{/if}
+					<input type="text" placeholder="N 50° 35.212'" bind:value={refLat} aria-invalid={refLat !== '' && !lat.ok} />
+					{#if refLat !== '' && !lat.ok}<span class="error">{lat.error}</span>{/if}
 				</label>
 				<label>
 					Reference longitude
-					<input type="text" placeholder="W 002° 26.874'" bind:value={lonText} aria-invalid={lonText !== '' && !lon.ok} />
-					{#if lonText !== '' && !lon.ok}<span class="error">{lon.error}</span>{/if}
+					<input type="text" placeholder="W 002° 26.874'" bind:value={refLon} aria-invalid={refLon !== '' && !lon.ok} />
+					{#if refLon !== '' && !lon.ok}<span class="error">{lon.error}</span>{/if}
 				</label>
 			</div>
 			<div class="scroll">

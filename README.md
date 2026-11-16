@@ -20,10 +20,22 @@ Working so far:
   each mark's latitude and longitude.
 - **Angle calculator**: the on-screen version of the laminated course angle
   calculator, with its reference tables. Open it directly with `#t=calc`.
+- **Lay**: one mark at a time in large type: bearing and distance from the
+  reference (or from another mark), what the GPS should read, and how far
+  upwind to drop the anchor. With the reference position set, the phone's
+  GPS gives distance to run and metres off the line, and a ping records
+  where each mark was actually laid.
+- **Line**: square start line bearings, bias and pin move, where a pin-end
+  boat anchors, and a tolerance check on the laid length.
+- **Wind**: log readings with large buttons; mean, range, skew from the axis
+  with shift advice, and the VHF wording for the report.
 - **Share course**: the whole course travels in the link.
 
-Not built yet: Lay mode for mark boats, wind log, course change tool,
-checklists, magnetic variation.
+The course, reference point, wind log and laid marks are saved on the device.
+Add `#t=lay`, `#t=line`, `#t=wind` or `#t=calc` to open a tool directly.
+
+Not built yet: course change tool, checklists, mark boat assignments,
+magnetic variation, live sync between boats.
 
 ## Develop
 
@@ -45,7 +57,9 @@ npm run build    # production build with service worker
   - `sizing.ts`: start line and gate sizing, laying tolerances
   - `calculator.ts`: course angle calculator pointers
   - `units.ts`: nautical miles and metres
+  - `guidance.ts`, `startline.ts`, `wind.ts`: live guidance, start line and wind log sums
 - `src/lib/share.ts` encodes a course into a link and validates it on the way in.
+- `src/lib/store.ts` saves state on the device; `src/lib/gps.ts` wraps the phone's GPS.
 - `src/lib/ui/` holds the Svelte components.
 
 ## Tests
