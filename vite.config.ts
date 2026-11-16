@@ -21,7 +21,11 @@ export default defineConfig({
 			},
 		}),
 	],
+	// Svelte needs its browser build when components run under Vitest. Leave
+	// the default conditions alone for the real build.
+	resolve: process.env.VITEST ? { conditions: ['browser'] } : {},
 	test: {
 		include: ['src/**/*.test.ts'],
+		environment: 'jsdom',
 	},
 })

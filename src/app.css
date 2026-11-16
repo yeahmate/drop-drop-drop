@@ -5,6 +5,8 @@
 	--ground: #f4f6f8;
 	--panel: #ffffff;
 	--axis: #1d4ed8;
+	--start: #c2410c;
+	--warn: #b91c1c;
 	font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	color: var(--ink);
 	background: var(--ground);

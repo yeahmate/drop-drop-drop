@@ -1,198 +1,137 @@
 <script lang="ts">
-	import {
-		formatBearing, formatDistance, leg, nmToMetres, readCalculator, trapezoid,
-		type DistanceUnit, type TrapezoidMark,
-	} from './lib/geo'
+	import { DEFAULT_SPEC, type CourseSpec, type DistanceUnit } from './lib/geo'
+	import { courseFromHash, shareUrl } from './lib/share'
+	import AngleCalculator from './lib/ui/AngleCalculator.svelte'
+	import PlanView from './lib/ui/PlanView.svelte'
 
-	let axis = $state(235)
-	let beatNm = $state(0.5)
-	let angle = $state(70)
+	type Tab = 'plan' | 'calculator'
+
+	let spec = $state<CourseSpec>(courseFromHash(location.hash) ?? { ...DEFAULT_SPEC, axis: 235 })
 	let unit = $state<DistanceUnit>('nm')
+	// #t=calc opens straight on the calculator, for a home-screen bookmark.
+	let tab = $state<Tab>(/[#&]t=calc/.test(location.hash) ? 'calculator' : 'plan')
+	let shared = $state('')
 
-	const rows: { mark: TrapezoidMark; name: string }[] = [
-		{ mark: '1', name: 'Mark 1' },
-		{ mark: '2', name: 'Mark 2' },
-		{ mark: '3', name: 'Gate 3' },
-		{ mark: 'start', name: 'Start line' },
-	]
-
-	let marks = $derived(trapezoid({ axis, beat: nmToMetres(beatNm), angle }))
-	let table = $derived(rows.map((r) => ({ ...r, ...leg(marks.ref, marks[r.mark]) })))
-	let dial = $derived(readCalculator(axis).filter((r) => r.angle === angle || r.angle >= 90))
+	async function share() {
+		const url = shareUrl(spec, location.href)
+		history.replaceState(null, '', url)
+		try {
+			await navigator.clipboard.writeText(url)
+			shared = 'Link copied'
+		} catch {
+			shared = 'Link is in the address bar'
+		}
+	}
 </script>
 
 <header>
 	<h1>Drop Drop Drop</h1>
-	<p>Trapezoid from the reference point · magnetic</p>
+	<nav aria-label="Tools">
+		<button type="button" aria-pressed={tab === 'plan'} onclick={() => (tab = 'plan')}>Plan</button>
+		<button type="button" aria-pressed={tab === 'calculator'} onclick={() => (tab = 'calculator')}>Angle calculator</button>
+	</nav>
+	<span class="grow"></span>
+	<label class="unit">
+		<span>Distances</span>
+		<select bind:value={unit}>
+			<option value="nm">NM first</option>
+			<option value="m">Metres first</option>
+		</select>
+	</label>
+	<button type="button" class="share" onclick={share}>Share course</button>
+	{#if shared}<span class="shared" role="status">{shared}</span>{/if}
 </header>
 
 <main>
-	<section class="controls">
-		<label>
-			Course axis
-			<input type="number" min="0" max="359" step="5" bind:value={axis} />
-		</label>
-		<label>
-			Beat (NM)
-			<input type="number" min="0.1" max="3" step="0.05" bind:value={beatNm} />
-		</label>
-		<label>
-			Interior angle
-			<select bind:value={angle}>
-				<option value={60}>60°</option>
-				<option value={70}>70°</option>
-				<option value={80}>80°</option>
-			</select>
-		</label>
-		<label>
-			Distances lead with
-			<select bind:value={unit}>
-				<option value="nm">Nautical miles</option>
-				<option value="m">Metres</option>
-			</select>
-		</label>
-	</section>
-
-	<section>
-		<h2>From the reference point (4s/4p)</h2>
-		<div class="scroll">
-			<table>
-				<thead>
-					<tr><th>Mark</th><th>Bearing</th><th>Distance</th><th>GPS reads</th></tr>
-				</thead>
-				<tbody>
-					{#each table as row (row.mark)}
-						<tr>
-							<td>{row.name}</td>
-							<td class="num">{formatBearing(row.bearing)}</td>
-							<td>{formatDistance(row.distance, unit)}</td>
-							<td class="num gps">{formatBearing(row.reciprocal)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+	{#if tab === 'plan'}
+		<PlanView bind:spec {unit} />
+	{:else}
+		<div class="card">
+			<AngleCalculator bind:axis={spec.axis} bind:angle={spec.angle} />
 		</div>
-	</section>
-
-	<section>
-		<h2>Course angle calculator, {angle}°</h2>
-		<div class="scroll">
-			<table>
-				<thead>
-					<tr><th>Pointer</th><th>Bearing</th></tr>
-				</thead>
-				<tbody>
-					{#each dial as r (r.label + r.offset)}
-						<tr>
-							<td>{r.label}</td>
-							<td class="num">{formatBearing(r.bearing)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</section>
+	{/if}
 </main>
 
 <style>
 	header {
 		background: var(--ink);
 		color: #fff;
-		padding: 16px 20px;
+		padding: 10px 16px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 12px;
 	}
 
 	h1 {
 		margin: 0;
-		font-size: 20px;
+		font-size: 18px;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 	}
 
-	header p {
-		margin: 4px 0 0;
+	nav {
+		display: flex;
+		gap: 4px;
+		background: #1b3550;
+		padding: 4px;
+		border-radius: 10px;
+	}
+
+	button,
+	select {
+		font: inherit;
 		font-size: 14px;
+		font-weight: 600;
+		min-height: 44px;
+		padding: 0 14px;
+		border-radius: 8px;
+		border: 0;
+	}
+
+	nav button {
+		background: transparent;
+		color: #fff;
+	}
+
+	nav button[aria-pressed='true'] {
+		background: #fff;
+		color: var(--ink);
+	}
+
+	.grow {
+		flex: 1;
+	}
+
+	.unit {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
 		color: #c9d6e3;
 	}
 
-	main {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: 16px;
-		display: grid;
-		gap: 16px;
+	.share {
+		background: #f97316;
+		color: var(--ink);
 	}
 
-	section {
+	.shared {
+		font-size: 13px;
+	}
+
+	main {
+		max-width: 1280px;
+		margin: 0 auto;
+		padding: 16px;
+	}
+
+	.card {
 		background: var(--panel);
 		border: 1px solid var(--line);
 		border-radius: 12px;
 		padding: 16px;
-	}
-
-	.controls {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-		gap: 12px;
-	}
-
-	label {
-		display: grid;
-		gap: 4px;
-		font-size: 13px;
-		color: var(--muted);
-	}
-
-	input,
-	select {
-		font: inherit;
-		font-size: 18px;
-		font-weight: 600;
-		color: var(--ink);
-		min-height: 48px;
-		padding: 0 10px;
-		border: 1px solid #94a3b8;
-		border-radius: 8px;
-		background: #fff;
-		width: 100%;
-	}
-
-	h2 {
-		margin: 0 0 8px;
-		font-size: 13px;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--muted);
-	}
-
-	.scroll {
-		overflow-x: auto;
-	}
-
-	table {
-		width: 100%;
-		border-collapse: collapse;
-		font-size: 17px;
-	}
-
-	th {
-		text-align: left;
-		font-size: 12px;
-		color: var(--muted);
-		padding: 6px 4px;
-	}
-
-	td {
-		padding: 10px 4px;
-		border-top: 1px solid #e3e9ef;
-		font-weight: 600;
-	}
-
-	.num {
-		font-variant-numeric: tabular-nums;
-		font-size: 22px;
-	}
-
-	.gps {
-		color: var(--axis);
+		max-width: 760px;
+		margin: 0 auto;
 	}
 </style>
