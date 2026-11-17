@@ -71,7 +71,8 @@ describe('switching north', () => {
 	const wind = [{ time: 1, direction: 358, speed: 10 }]
 
 	it('re-expresses the axis and wind log so nothing moves on the water', () => {
-		const t = switchNorth(spec, wind, 'true', 5)
+		const t = switchNorth(spec, wind, 'true', 5, 90)
+		expect(t.tideSet).toBe(95)
 		expect(t.spec.north).toBe('true')
 		expect(t.spec.axis).toBe(240)
 		expect(t.wind[0].direction).toBe(3)
@@ -83,5 +84,6 @@ describe('switching north', () => {
 	it('only relabels when the variation is unknown, and does nothing if already there', () => {
 		expect(switchNorth(spec, wind, 'true', null).spec.axis).toBe(235)
 		expect(switchNorth(spec, wind, 'magnetic', 5).spec).toBe(spec)
+		expect(switchNorth(spec, wind, 'magnetic', 5, 90).tideSet).toBe(90)
 	})
 })
