@@ -91,6 +91,10 @@ start, stop, logs, update and rollback) are in [`deploy/`](deploy/README.md).
   the finish line running astern of the committee boat.
 - The reaching finish on LR and LRA runs off the committee boat's starboard side.
 
-## Conventions
+## Contributing
 
-Tabs for indentation (see `.editorconfig`).
+- Major features go in a pull request.
+- Each change that a user or host would notice adds a fragment to
+  [`changelog.d/`](changelog.d/README.md) rather than editing `CHANGELOG.md`.
+- Features land with tests; `npm test` must pass.
+- Tabs for indentation (see `.editorconfig`).

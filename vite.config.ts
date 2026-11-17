@@ -25,7 +25,7 @@ export default defineConfig({
 	// the default conditions alone for the real build.
 	resolve: process.env.VITEST ? { conditions: ['browser'] } : {},
 	test: {
-		include: ['src/**/*.test.ts', 'deploy/**/*.test.ts'],
+		include: ['src/**/*.test.ts', 'deploy/**/*.test.ts', 'scripts/**/*.test.mjs'],
 		environment: 'jsdom',
 	},
 })
