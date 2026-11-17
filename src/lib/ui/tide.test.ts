@@ -45,14 +45,22 @@ describe('TideView', () => {
 		expect(screen.queryByText(/^Set axis to/)).toBeNull()
 	})
 
-	it('uses the wind log when there are readings', () => {
-		const wind = [230, 240].map((direction, i) => ({ time: i, direction, speed: 12 }))
+	it('corrects committee boat readings from the log for the current', () => {
+		// At anchor on the committee boat: 235 at 12 kn, water flowing up the
+		// beat into the wind at 1.5 kn. Wind against tide: 13.5 kn sailing wind.
+		const wind = [230, 240].map((direction, i) => ({ time: i, direction, speed: 12, station: 'Committee', anchored: true }))
 		render(TideHarness, { initial: { ...spec, axis: 235 }, wind, current: { set: 235, rate: 1.5 } })
-		expect(text('ground')).toBe('Ground wind from the log: 235 at 12 kn')
-		// Water flowing up the beat, into the wind: wind against tide.
+		expect(text('ground')).toBe('From the wind log: 2 at anchor, corrected for the current; 0 drifting, used as read.')
 		expect(text('along')).toBe('1.5 kn up the beat')
 		expect(text('sailing')).toBe('235 at 13.5 kn')
-		expect(screen.queryByLabelText('Ground wind from')).toBeNull()
+		expect(screen.queryByLabelText('Wind at anchor, from')).toBeNull()
+	})
+
+	it('uses drifting mark boat readings as the sailing wind without correcting them', () => {
+		const wind = [230, 240].map((direction, i) => ({ time: i, direction, speed: 12, station: 'Mark 1' }))
+		render(TideHarness, { initial: { ...spec, axis: 235 }, wind, current: { set: 235, rate: 1.5 } })
+		expect(text('ground')).toBe('From the wind log: 0 at anchor, corrected for the current; 2 drifting, used as read.')
+		expect(text('sailing')).toBe('235 at 12.0 kn')
 	})
 
 	it('asks for the current before describing it', () => {

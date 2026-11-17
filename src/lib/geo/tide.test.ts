@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { currentOnAxis, drift, sailingWind, stickFeetRule, stickKnots, stickRuleOfThumb } from './index'
+import { asSailingWind, currentOnAxis, drift, sailingWind, stationAnchored, summarise, stickFeetRule, stickKnots, stickRuleOfThumb } from './index'
 
 describe('tide stick', () => {
 	it('converts a timed drift to knots', () => {
@@ -90,5 +90,37 @@ describe('drift', () => {
 	it('is 1852 m an hour at one knot', () => {
 		expect(drift(1, 60)).toBeCloseTo(1852)
 		expect(drift(1.5, 5)).toBeCloseTo(231.5)
+	})
+})
+
+describe('a mixed wind log', () => {
+	// The committee boat reads the wind at anchor; mark boats read it drifting.
+	const current = { set: 90, rate: 2 }
+	const committee = { time: 1, direction: 0, speed: 10, station: 'Committee', anchored: true }
+	const mark = { time: 2, direction: 11, speed: 10.2, station: 'Mark 1' }
+
+	it('defaults the committee boat to anchored and mark boats to drifting', () => {
+		expect(stationAnchored('Committee')).toBe(true)
+		for (const s of ['Mark 1', 'Mark 2', 'Gate 3', 'Gate 4', 'Pin']) expect(stationAnchored(s)).toBe(false)
+	})
+
+	it('corrects anchored readings for the current and leaves drifting ones alone', () => {
+		const [c, m] = asSailingWind([committee, mark], current)
+		expect(c.direction).toBeCloseTo(11.31, 2)
+		expect(c.speed).toBeCloseTo(10.198, 3)
+		expect(c.station).toBe('Committee')
+		expect(m).toBe(mark)
+	})
+
+	it('makes the two boats agree once the committee reading is corrected', () => {
+		// Uncorrected, the boats disagree by 11 degrees for the same wind.
+		expect(summarise([committee, mark])!.mean).toBeCloseTo(5.5, 0)
+		const s = summarise(asSailingWind([committee, mark], current))!
+		expect(s.mean).toBeCloseTo(11.2, 1)
+		expect(Math.round(s.high) - Math.round(s.low)).toBe(0)
+	})
+
+	it('changes nothing in slack water', () => {
+		expect(asSailingWind([committee], { set: 90, rate: 0 })[0]).toBe(committee)
 	})
 })

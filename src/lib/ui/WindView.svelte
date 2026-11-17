@@ -1,25 +1,29 @@
 <script lang="ts">
 	import {
-		angleDiff, formatBearing, labelBearing, norm, skewFromAxis, summarise, windReport,
-		type CourseSpec, type WindReading,
+		STATIONS, angleDiff, asSailingWind, formatBearing, labelBearing, norm, skewFromAxis, stationAnchored,
+		summarise, windReport, type CourseSpec, type Current, type WindReading,
 	} from '../geo'
 
 	let {
-		spec = $bindable(), wind = $bindable([]), now = Date.now,
-	}: { spec: CourseSpec; wind?: WindReading[]; now?: () => number } = $props()
+		spec = $bindable(), wind = $bindable([]), tide = { set: 0, rate: 0 }, now = Date.now,
+	}: { spec: CourseSpec; wind?: WindReading[]; tide?: Current; now?: () => number } = $props()
 
-	const stations = ['Mark 1', 'Mark 2', 'Gate 3', 'Gate 4', 'Committee', 'Pin']
 	const W = 340
 	const H = 160
 	const SPAN = 30
 
-	let station = $state(stations[0])
+	let station = $state<string>(STATIONS[0])
+	// The committee boat reads at anchor, mark boats while drifting.
+	let anchored = $state(stationAnchored(STATIONS[0]))
 	// svelte-ignore state_referenced_locally
 	let direction = $state(wind.length ? wind[wind.length - 1].direction : spec.axis)
 	// svelte-ignore state_referenced_locally
 	let speed = $state(wind.length ? wind[wind.length - 1].speed : 10)
 
-	let recent = $derived(wind.slice(-12))
+	// Anchored readings are corrected for the current, so every reading is the
+	// sailing wind the fleet races in.
+	let recent = $derived(asSailingWind(wind.slice(-12), tide))
+	let corrected = $derived(tide.rate > 0 ? wind.slice(-12).filter((r) => r.anchored).length : 0)
 	let summary = $derived(summarise(recent))
 	let skew = $derived(summary ? skewFromAxis(summary.mean, spec.axis) : null)
 	let points = $derived(recent.map((r, i) => ({
@@ -34,7 +38,10 @@
 	}
 
 	function log() {
-		wind = [...wind, { time: now(), direction: norm(direction), speed: Math.max(0, speed) }]
+		wind = [...wind, {
+			time: now(), direction: norm(direction), speed: Math.max(0, speed), station,
+			...(anchored ? { anchored: true } : {}),
+		}]
 	}
 
 	function undo() {
@@ -48,7 +55,7 @@
 
 <div class="wind">
 	<section>
-		<h2>Last {recent.length} readings · axis {labelBearing(spec.axis, spec.north)}</h2>
+		<h2>Sailing wind, last {recent.length} readings · axis {labelBearing(spec.axis, spec.north)}</h2>
 		{#if summary && skew}
 			<div class="stats">
 				<div>
@@ -80,6 +87,11 @@
 				<text x="26" y={H / 2 + 4} text-anchor="end" class="tick">axis</text>
 				<text x="26" y={H - 6} text-anchor="end" class="tick">−{SPAN}</text>
 			</svg>
+			{#if corrected}
+				<p class="hint" data-testid="corrected">
+					{corrected} at-anchor {corrected === 1 ? 'reading' : 'readings'} corrected for {tide.rate} kn of current towards {formatBearing(tide.set)}.
+				</p>
+			{/if}
 			<button type="button" onclick={setAxis}>Set axis to mean wind</button>
 		{:else}
 			<p class="hint">No readings yet. Log one every five minutes before the start.</p>
@@ -90,8 +102,15 @@
 		<h2>New reading</h2>
 		<label>
 			Where
-			<select bind:value={station}>
-				{#each stations as s (s)}<option value={s}>{s}</option>{/each}
+			<select bind:value={station} onchange={() => (anchored = stationAnchored(station))}>
+				{#each STATIONS as s (s)}<option value={s}>{s}</option>{/each}
+			</select>
+		</label>
+		<label>
+			Taken
+			<select value={anchored ? 'anchor' : 'drift'} onchange={(e) => (anchored = e.currentTarget.value === 'anchor')}>
+				<option value="anchor">At anchor (wind over the ground)</option>
+				<option value="drift">Drifting (sailing wind)</option>
 			</select>
 		</label>
 		<div class="stepper">

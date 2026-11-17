@@ -4,7 +4,7 @@
  */
 
 import { norm } from './bearing'
-import { angleDiff } from './wind'
+import { angleDiff, type WindReading } from './wind'
 
 const KNOTS_PER_METRE_PER_SECOND = 3600 / 1852
 
@@ -53,6 +53,18 @@ export function sailingWind(ground: Wind, current: Current): Wind {
 		direction: speed < 1e-9 ? norm(ground.direction) : norm((Math.atan2(-e, -n) * 180) / Math.PI),
 		speed,
 	}
+}
+
+/**
+ * Put a mixed log on one footing. Readings taken at anchor are corrected for
+ * the current; readings taken drifting already are the sailing wind.
+ */
+export function asSailingWind(readings: WindReading[], current: Current): WindReading[] {
+	return readings.map((r) => {
+		if (!r.anchored || current.rate <= 0) return r
+		const s = sailingWind(r, current)
+		return { ...r, direction: s.direction, speed: s.speed }
+	})
 }
 
 export interface AxisCurrent {

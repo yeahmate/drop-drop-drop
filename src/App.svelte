@@ -124,7 +124,7 @@
 	{:else if tab === 'line'}
 		<LineView {spec} {unit} />
 	{:else if tab === 'wind'}
-		<WindView bind:spec bind:wind />
+		<WindView bind:spec bind:wind {tide} />
 	{:else if tab === 'tide'}
 		<TideView bind:spec {wind} bind:tide />
 	{:else if tab === 'change'}

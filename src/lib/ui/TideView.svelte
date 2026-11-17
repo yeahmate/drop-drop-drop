@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		currentOnAxis, drift, formatBearing, labelBearing, norm, sailingWind, stickKnots, stickRuleOfThumb,
+		asSailingWind, currentOnAxis, drift, formatBearing, labelBearing, norm, sailingWind, stickKnots, stickRuleOfThumb,
 		summarise, type CourseSpec, type Current, type WindReading,
 	} from '../geo'
 
@@ -16,11 +16,14 @@
 	let manualSpeed = $state(10)
 
 	let measured = $derived(metres && seconds ? stickKnots(metres, seconds) : null)
-	let logged = $derived(summarise(wind.slice(-12)))
-	let ground = $derived(logged
+	// The log mixes at-anchor readings (committee boat) and drifting ones (mark
+	// boats). Only the at-anchor ones need correcting for the current.
+	let recent = $derived(wind.slice(-12))
+	let logged = $derived(summarise(asSailingWind(recent, tide)))
+	let atAnchor = $derived(recent.filter((r) => r.anchored).length)
+	let sailing = $derived(logged
 		? { direction: logged.mean, speed: logged.meanSpeed }
-		: { direction: manualDirection, speed: manualSpeed })
-	let sailing = $derived(sailingWind(ground, tide))
+		: sailingWind({ direction: manualDirection, speed: manualSpeed }, tide))
 	let onAxis = $derived(currentOnAxis(spec.axis, tide))
 	let suggested = $derived(Math.round(sailing.direction / 5) * 5 % 360)
 
@@ -95,16 +98,18 @@
 	<section>
 		<h2>Sailing wind</h2>
 		{#if logged}
-			<p class="hint" data-testid="ground">Ground wind from the log: {formatBearing(ground.direction)} at {ground.speed.toFixed(0)} kn</p>
+			<p class="hint" data-testid="ground">
+				From the wind log: {atAnchor} at anchor, corrected for the current; {recent.length - atAnchor} drifting, used as read.
+			</p>
 		{:else}
 			<div class="pair">
-				<label>Ground wind from<input type="number" min="0" max="359" bind:value={manualDirection} /></label>
+				<label>Wind at anchor, from<input type="number" min="0" max="359" bind:value={manualDirection} /></label>
 				<label>Speed (kn)<input type="number" min="0" max="60" bind:value={manualSpeed} /></label>
 			</div>
-			<p class="hint">Readings in the wind log replace these.</p>
+			<p class="hint">As read on the committee boat. Readings in the wind log replace these.</p>
 		{/if}
 		<p class="huge" data-testid="sailing">{formatBearing(sailing.direction)} <small>at {sailing.speed.toFixed(1)} kn</small></p>
-		<p class="hint">What the fleet races in: the wind felt by a boat carried on the current. Take ground wind readings at anchor.</p>
+		<p class="hint">What the fleet races in: the wind felt by a boat carried on the current. A drifting mark boat reads it directly; the committee boat at anchor does not.</p>
 		<p class="fact" data-testid="gates">Gates and start line square to it: {formatBearing(sailing.direction + 90)} / {formatBearing(sailing.direction - 90)}</p>
 		{#if suggested !== Math.round(norm(spec.axis))}
 			<button type="button" class="primary" onclick={setAxis}>Set axis to {formatBearing(suggested)}</button>

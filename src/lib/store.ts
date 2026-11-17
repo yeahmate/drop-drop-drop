@@ -5,7 +5,7 @@
  * read back is validated.
  */
 
-import type { CourseSpec, DistanceUnit, Vec, WindReading } from './geo'
+import { STATIONS, type CourseSpec, type DistanceUnit, type Vec, type WindReading } from './geo'
 import { decodeCourse, encodeCourse } from './share'
 
 const KEY = 'drop-drop-drop:v1'
@@ -50,7 +50,11 @@ export function load(storage: StorageLike | undefined): Saved {
 			.filter((w): w is WindReading =>
 				!!w && finite(w.time) && finite(w.direction) && finite(w.speed)
 				&& w.direction >= 0 && w.direction < 360 && w.speed >= 0 && w.speed <= 100)
-			.map((w) => ({ time: w.time, direction: w.direction, speed: w.speed }))
+			.map((w) => ({
+				time: w.time, direction: w.direction, speed: w.speed,
+				...(typeof w.station === 'string' && (STATIONS as readonly string[]).includes(w.station) ? { station: w.station } : {}),
+				...(w.anchored === true ? { anchored: true } : {}),
+			}))
 			.slice(-200)
 		: []
 
