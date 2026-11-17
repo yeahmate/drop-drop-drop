@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# Drop Drop Drop server control: start, stop, logs, update and rollback.
+set -euo pipefail
+
+SELF=$(readlink -f "${BASH_SOURCE[0]}")
+LIB=${DDD_LIB:-$(dirname "$SELF")/lib.sh}
+[ -r "$LIB" ] || LIB=/usr/local/lib/drop-drop-drop/lib.sh
+# shellcheck source=lib.sh
+. "$LIB"
+
+RELEASES="$WEB_ROOT/releases"
+CURRENT="$WEB_ROOT/current"
+
+usage() {
+	cat <<USAGE
+Usage: dddctl <command>
+
+  status            Service state, live release and a check of the site
+  start             Start the web server
+  stop              Stop the web server
+  restart           Restart the web server
+  logs [-f] [N]     Last N (default 50) lines of service and access logs; -f follows
+  update [ref]      Fetch, test, build and switch to a branch, tag or commit
+                    (default: $BRANCH). The live site is untouched if anything fails.
+  rollback [name]   Switch back to the previous release, or to a named one
+  releases          List releases kept on the server
+  help              This text
+USAGE
+}
+
+service() {
+	[ "$TEST_MODE" = 1 ] && { say "(test) systemctl $*"; return 0; }
+	systemctl "$@"
+}
+
+current_release() {
+	[ -L "$CURRENT" ] && basename "$(readlink "$CURRENT")" || true
+}
+
+list_releases() {
+	[ -d "$RELEASES" ] || return 0
+	local name
+	for name in "$RELEASES"/*/; do
+		[ -d "$name" ] || continue
+		name=$(basename "$name")
+		valid_release "$name" && printf '%s\n' "$name"
+	done | sort
+}
+
+# Point "current" at a release in one atomic rename, so no request ever sees
+# a half-switched site.
+switch_to() {
+	local name=$1
+	valid_release "$name" || die "Not a release name: $name"
+	[ -f "$RELEASES/$name/index.html" ] || die "Release $name is missing or incomplete."
+	ln -sfn "releases/$name" "$WEB_ROOT/current.new"
+	mv -T "$WEB_ROOT/current.new" "$CURRENT"
+	say "Live release is now $name"
+}
+
+# Delete old releases, keeping the newest $KEEP and always the live one.
+prune() {
+	local live name
+	live=$(current_release)
+	list_releases | head -n "-$KEEP" | while read -r name; do
+		[ "$name" = "$live" ] && continue
+		valid_release "$name" || continue
+		rm -rf -- "${RELEASES:?}/${name:?}"
+		say "Removed old release $name"
+	done
+}
+
+# Copy a built site into a new release and make it live.
+activate() {
+	local src=$1 name=$2 dest
+	valid_release "$name" || die "Not a release name: $name"
+	[ -f "$src/index.html" ] || die "No index.html in $src: the build did not produce a site."
+	dest="$RELEASES/$name"
+	[ -e "$dest" ] && die "Release $name already exists."
+	mkdir -p "$dest"
+	cp -R "$src/." "$dest/"
+	if [ "$TEST_MODE" != 1 ]; then
+		chown -R root:root "$dest"
+		chmod -R u=rwX,go=rX "$dest"
+		command -v restorecon >/dev/null && restorecon -R "$WEB_ROOT"
+	fi
+	switch_to "$name"
+	prune
+}
+
+cmd_update() {
+	need_root update
+	local ref=${1:-$BRANCH} sha name
+	[[ "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || die "Not a branch, tag or commit: $ref"
+	[ -d "$REPO_DIR/.git" ] || die "No checkout at $REPO_DIR. Run deploy/install.sh first."
+
+	say "Fetching $ref"
+	as_deploy git -C "$REPO_DIR" fetch --prune --tags origin
+	if as_deploy git -C "$REPO_DIR" rev-parse --verify --quiet "origin/$ref^{commit}" >/dev/null; then
+		as_deploy git -C "$REPO_DIR" checkout --quiet --detach "origin/$ref"
+	else
+		as_deploy git -C "$REPO_DIR" checkout --quiet --detach "$ref"
+	fi
+	sha=$(as_deploy git -C "$REPO_DIR" rev-parse --short=10 HEAD)
+
+	say "Installing dependencies, testing and building $sha"
+	as_deploy env -C "$REPO_DIR" npm ci --no-audit --no-fund
+	as_deploy env -C "$REPO_DIR" npm test
+	as_deploy env -C "$REPO_DIR" npm run build
+
+	name="$(date -u +%Y%m%d-%H%M%S)-$sha"
+	activate "$REPO_DIR/dist" "$name"
+	[ "${DDD_SKIP_CHECK:-0}" = 1 ] || cmd_check || warn "The site did not answer. Run: dddctl status"
+}
+
+cmd_rollback() {
+	need_root rollback
+	local target=${1:-} live
+	live=$(current_release)
+	if [ -z "$target" ]; then
+		target=$(list_releases | grep -v -x -F "$live" | awk -v live="$live" '$0 < live' | tail -n 1)
+		[ -n "$target" ] || die "There is no earlier release to roll back to."
+	fi
+	switch_to "$target"
+}
+
+cmd_releases() {
+	local live name
+	live=$(current_release)
+	list_releases | while read -r name; do
+		if [ "$name" = "$live" ]; then printf '* %s (live)\n' "$name"; else printf '  %s\n' "$name"; fi
+	done
+}
+
+# Fetch the home page through the web server, bypassing DNS.
+cmd_check() {
+	[ "$TEST_MODE" = 1 ] && return 0
+	[ -n "$DOMAIN" ] || { warn "No DOMAIN in $CONF_FILE."; return 1; }
+	curl --silent --show-error --fail --max-time 10 --output /dev/null \
+		--resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" && say "https://$DOMAIN/ answers"
+}
+
+cmd_status() {
+	service --no-pager --lines=0 status "$SERVICE" || true
+	echo
+	say "Live release: $(current_release || true)"
+	cmd_check || true
+}
+
+cmd_logs() {
+	local follow=0 lines=50
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			-f | --follow) follow=1 ;;
+			'' | *[!0-9]*) die "logs takes -f and a number of lines." ;;
+			*) lines=$1 ;;
+		esac
+		shift
+	done
+	if [ "$follow" = 1 ]; then
+		say "Following $SERVICE (Ctrl-C to stop). Access log: $ACCESS_LOG"
+		exec journalctl -u "$SERVICE" -n "$lines" -f
+	fi
+	say "Service log"
+	journalctl -u "$SERVICE" -n "$lines" --no-pager || true
+	if [ -r "$ACCESS_LOG" ]; then
+		echo
+		say "Access log ($ACCESS_LOG)"
+		tail -n "$lines" "$ACCESS_LOG"
+	fi
+}
+
+main() {
+	local cmd=${1:-help}
+	[ $# -gt 0 ] && shift
+	case "$cmd" in
+		status) cmd_status ;;
+		start | stop | restart) need_root "$cmd"; service "$cmd" "$SERVICE"; say "$SERVICE: $cmd done" ;;
+		logs) cmd_logs "$@" ;;
+		update) cmd_update "$@" ;;
+		rollback) cmd_rollback "$@" ;;
+		releases) cmd_releases ;;
+		# Used by the test suite and by install.sh.
+		_activate) need_root _activate; activate "$@" ;;
+		help | -h | --help) usage ;;
+		*) usage >&2; exit 2 ;;
+	esac
+}
+
+main "$@"

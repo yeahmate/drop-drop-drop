@@ -47,6 +47,11 @@ npm run check    # type check
 npm run build    # production build with service worker
 ```
 
+## Deploy
+
+Scripts for a Rocky Linux server (install, hardening, and `dddctl` for
+start, stop, logs, update and rollback) are in [`deploy/`](deploy/README.md).
+
 ## Layout
 
 - `src/lib/geo/` is the geometry engine. It has no UI dependencies.
