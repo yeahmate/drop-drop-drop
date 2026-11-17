@@ -42,8 +42,22 @@ describe('App', () => {
 		expect((screen.getByLabelText('Reference latitude') as HTMLInputElement).value).toBe("N 50° 35.212'")
 	})
 
+	it('keeps the settings behind a chip that shows the current choices', async () => {
+		render(App)
+		const chip = screen.getByRole('button', { name: /^Settings/ })
+		expect(chip.textContent).toBe('°M · NM')
+		expect(screen.queryByLabelText('Bearings')).toBeNull()
+		await fireEvent.click(chip)
+		await fireEvent.change(screen.getByLabelText('Distances'), { target: { value: 'm' } })
+		await fireEvent.change(screen.getByLabelText('Bearings'), { target: { value: 'true' } })
+		expect(chip.textContent).toBe('°T · m')
+		await fireEvent.click(chip)
+		expect(screen.queryByLabelText('Bearings')).toBeNull()
+	})
+
 	it('says what magnetic means until a reference is set, then shows the variation', async () => {
 		render(App)
+		await fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
 		expect(text('variation')).toContain('Set the reference position')
 		await fireEvent.input(screen.getByLabelText('Reference latitude'), { target: { value: "N 50° 35.212'" } })
 		await fireEvent.input(screen.getByLabelText('Reference longitude'), { target: { value: "W 002° 26.874'" } })
@@ -55,6 +69,7 @@ describe('App', () => {
 		render(App)
 		await fireEvent.input(screen.getByLabelText('Reference latitude'), { target: { value: "N 49° 17.000'" } })
 		await fireEvent.input(screen.getByLabelText('Reference longitude'), { target: { value: "W 123° 07.000'" } })
+		await fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
 		const shown = Number(/(\d+\.\d)°E/.exec(text('variation')!)![1])
 		expect(shown).toBeGreaterThan(10)
 		await fireEvent.change(screen.getByLabelText('Bearings'), { target: { value: 'true' } })
