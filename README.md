@@ -34,13 +34,17 @@ Working so far:
   mark boat's move, and whether the sailing instructions need a signal.
 - **Brief**: who lays what with bearings, a load list, and the mark layer
   briefing checklist with the course's own answers filled in.
+- **Magnetic or true**: bearings are magnetic by default. Variation comes
+  from the World Magnetic Model at the reference position and is applied
+  wherever a bearing meets a real position: mark latitude and longitude, and
+  GPS guidance.
 - **Share course**: the whole course travels in the link.
 
 The course, reference point, wind log, laid marks and checklist are saved on
 the device. Add `#t=lay`, `#t=line`, `#t=wind`, `#t=change`, `#t=brief` or
 `#t=calc` to open a tool directly.
 
-Not built yet: magnetic variation, tide tools, class speed data for leg
+Not built yet: tide tools, class speed data for leg
 times, a map layer, live sync between boats.
 
 ## Develop
@@ -69,6 +73,7 @@ start, stop, logs, update and rollback) are in [`deploy/`](deploy/README.md).
   - `calculator.ts`: course angle calculator pointers
   - `units.ts`: nautical miles and metres
   - `guidance.ts`, `startline.ts`, `wind.ts`: live guidance, start line and wind log sums
+  - `magnetic.ts`: magnetic variation and switching between magnetic and true
   - `change.ts`, `crew.ts`: course changes, mark boat assignments, equipment
 - `src/lib/share.ts` encodes a course into a link and validates it on the way in.
 - `src/lib/store.ts` saves state on the device; `src/lib/gps.ts` wraps the phone's GPS.
@@ -87,6 +92,9 @@ start, stop, logs, update and rollback) are in [`deploy/`](deploy/README.md).
 
 ## Assumptions to confirm
 
+- The magnetic model (WMM2025) runs out in November 2029. After that the app
+  says so and treats magnetic as true until the `geomagnetism` package is
+  updated.
 - Mark 5 (IX, OX) defaults to 150 m downwind of the start line centre, with
   the finish line running astern of the committee boat.
 - The reaching finish on LR and LRA runs off the committee boat's starboard side.

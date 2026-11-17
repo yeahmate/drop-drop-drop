@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		BOAT_CLASSES, COURSE_TYPES, buildCourse, estimatedMinutes, formatBearing, formatCoordinate,
+		BOAT_CLASSES, COURSE_TYPES, appliedVariation, buildCourse, courseToTrue, labelBearing, estimatedMinutes, formatBearing, formatCoordinate,
 		formatDistance, gateWidth, hasOffsetMark, isTrapezoid, layTable, metresToNm, nmToMetres, norm,
 		parseCoordinate, roundingOrder, signal, startLineLength, toLatLon,
 		type CourseSpec, type DistanceUnit,
@@ -8,8 +8,15 @@
 	import CourseDiagram from './CourseDiagram.svelte'
 
 	let {
-		spec = $bindable(), unit = 'nm', refLat = $bindable(''), refLon = $bindable(''),
-	}: { spec: CourseSpec; unit?: DistanceUnit; refLat?: string; refLon?: string } = $props()
+		spec = $bindable(), unit = 'nm', refLat = $bindable(''), refLon = $bindable(''), variation = null,
+	}: {
+		spec: CourseSpec
+		unit?: DistanceUnit
+		refLat?: string
+		refLon?: string
+		/** Magnetic variation at the reference, degrees east; null if unknown. */
+		variation?: number | null
+	} = $props()
 
 	let boatClass = $state(BOAT_CLASSES[0].name)
 	let fleet = $state(40)
@@ -52,7 +59,7 @@
 <div class="plan">
 	<div class="main">
 		<section>
-			<h2><span class="signal">{signal(spec)}</span> axis {formatBearing(spec.axis)}</h2>
+			<h2><span class="signal">{signal(spec)}</span> axis {labelBearing(spec.axis, spec.north)}</h2>
 			<p class="order" data-testid="rounding-order">{roundingOrder(course)}</p>
 			<CourseDiagram {course} axis={spec.axis} />
 		</section>
@@ -103,7 +110,7 @@
 								<td>{formatDistance(row.distance, unit)}</td>
 								<td class="num gps">{formatBearing(row.gpsReads)}</td>
 								{#if reference}
-									{@const p = toLatLon(reference, row.position)}
+									{@const p = toLatLon(reference, courseToTrue(row.position, appliedVariation(spec.north, variation)))}
 									<td class="pos">{formatCoordinate(p.lat, 'lat')}<br />{formatCoordinate(p.lon, 'lon')}</td>
 								{/if}
 							</tr>

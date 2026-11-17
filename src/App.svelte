@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { DEFAULT_SPEC, type CourseSpec } from './lib/geo'
+	import {
+		DEFAULT_SPEC, formatVariation, parseCoordinate, switchNorth, variation as variationAt,
+		type CourseSpec, type North,
+	} from './lib/geo'
 	import { courseFromHash, shareUrl } from './lib/share'
 	import { deviceStorage, load, save } from './lib/store'
 	import AngleCalculator from './lib/ui/AngleCalculator.svelte'
@@ -39,6 +42,22 @@
 	let tab = $state<Tab>(tabs.find((t) => t.id === hashTab)?.id ?? (linked ? 'lay' : 'plan'))
 	let shared = $state('')
 
+	// Variation is worked out from the reference position and today's date.
+	const today = new Date()
+	let reference = $derived.by(() => {
+		const lat = parseCoordinate(refLat, 'lat')
+		const lon = parseCoordinate(refLon, 'lon')
+		return lat.ok && lon.ok ? { lat: lat.value, lon: lon.value } : null
+	})
+	let variation = $derived(reference ? variationAt(reference, today) : null)
+
+	function setNorth(event: Event) {
+		const to = (event.currentTarget as HTMLSelectElement).value as North
+		const next = switchNorth($state.snapshot(spec) as CourseSpec, $state.snapshot(wind), to, variation)
+		spec = next.spec
+		wind = next.wind
+	}
+
 	$effect(() => {
 		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp, brief: $state.snapshot(brief) })
 	})
@@ -64,6 +83,13 @@
 	</nav>
 	<span class="grow"></span>
 	<label class="unit">
+		<span>Bearings</span>
+		<select value={spec.north} onchange={setNorth}>
+			<option value="magnetic">Magnetic</option>
+			<option value="true">True</option>
+		</select>
+	</label>
+	<label class="unit">
 		<span>Distances</span>
 		<select bind:value={unit}>
 			<option value="nm">NM first</option>
@@ -74,11 +100,23 @@
 	{#if shared}<span class="shared" role="status">{shared}</span>{/if}
 </header>
 
+<p class="variation" data-testid="variation">
+	{#if variation !== null}
+		Variation at the reference: {formatVariation(variation)}
+	{:else if reference}
+		The magnetic model has expired, so positions and GPS guidance treat magnetic as true. Update the app.
+	{:else if spec.north === 'magnetic'}
+		Bearings are magnetic. Set the reference position to apply variation to positions and GPS guidance.
+	{:else}
+		Bearings are true.
+	{/if}
+</p>
+
 <main>
 	{#if tab === 'plan'}
-		<PlanView bind:spec {unit} bind:refLat bind:refLon />
+		<PlanView bind:spec {unit} bind:refLat bind:refLon {variation} />
 	{:else if tab === 'lay'}
-		<LayView {spec} {unit} bind:refLat bind:refLon bind:laid bind:depth bind:warp />
+		<LayView {spec} {unit} bind:refLat bind:refLon bind:laid bind:depth bind:warp {variation} />
 	{:else if tab === 'line'}
 		<LineView {spec} {unit} />
 	{:else if tab === 'wind'}
@@ -161,6 +199,14 @@
 
 	.shared {
 		font-size: 13px;
+	}
+
+	.variation {
+		margin: 0;
+		padding: 6px 16px;
+		font-size: 13px;
+		background: #1b3550;
+		color: #c9d6e3;
 	}
 
 	main {

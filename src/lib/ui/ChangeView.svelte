@@ -67,7 +67,7 @@
 				</select>
 			</label>
 		</div>
-		<p class="hint" data-testid="current">Now {formatBearing(current.bearing)} · {formatDistance(current.distance, unit)}</p>
+		<p class="hint" data-testid="current">Now {formatBearing(current.bearing)} · {formatDistance(current.distance, unit)} · {spec.north}</p>
 	</section>
 
 	<section>
