@@ -203,6 +203,44 @@ describe('WindView', () => {
 		expect(text('advice')).toBe('No change needed')
 	})
 
+	it('records mark boat readings as drifting and committee boat readings as at anchor', async () => {
+		render(WindHarness, { initial: spec })
+		await fireEvent.click(screen.getByText('Log reading'))
+		expect(JSON.parse(text('last')!)).toMatchObject({ station: 'Mark 1', direction: 235 })
+		expect(JSON.parse(text('last')!).anchored).toBeUndefined()
+
+		await fireEvent.change(screen.getByLabelText('Where'), { target: { value: 'Committee' } })
+		expect((screen.getByLabelText('Taken') as HTMLSelectElement).value).toBe('anchor')
+		await fireEvent.click(screen.getByText('Log reading'))
+		expect(JSON.parse(text('last')!)).toMatchObject({ station: 'Committee', anchored: true })
+
+		// A mark boat that happens to be anchored can say so.
+		await fireEvent.change(screen.getByLabelText('Where'), { target: { value: 'Pin' } })
+		expect((screen.getByLabelText('Taken') as HTMLSelectElement).value).toBe('drift')
+		await fireEvent.change(screen.getByLabelText('Taken'), { target: { value: 'anchor' } })
+		await fireEvent.click(screen.getByText('Log reading'))
+		expect(JSON.parse(text('last')!)).toMatchObject({ station: 'Pin', anchored: true })
+	})
+
+	it('corrects only the at-anchor readings for the current', () => {
+		// Northerly 10 kn, 2 kn flowing east. The committee boat at anchor reads
+		// 000; a drifting mark boat reads 011. Both are the same sailing wind.
+		const mixed = [
+			{ time: 1, direction: 0, speed: 10, station: 'Committee', anchored: true },
+			{ time: 2, direction: 11, speed: 10, station: 'Mark 1' },
+		]
+		render(WindHarness, { initial: { ...spec, axis: 10 }, readings: mixed, tide: { set: 90, rate: 2 } })
+		expect(text('mean')).toBe('011')
+		expect(text('range')).toBe('011–011')
+		expect(text('corrected')).toBe('1 at-anchor reading corrected for 2 kn of current towards 090.')
+		cleanup()
+
+		// In slack water nothing is corrected and the boats are averaged as read.
+		render(WindHarness, { initial: { ...spec, axis: 10 }, readings: mixed })
+		expect(text('mean')).toBe('006')
+		expect(screen.queryByTestId('corrected')).toBeNull()
+	})
+
 	it('wraps the stepper through north', async () => {
 		render(WindHarness, { initial: { ...spec, axis: 0 } })
 		await fireEvent.click(screen.getByLabelText('Direction minus 5'))

@@ -17,7 +17,7 @@ describe('App', () => {
 		render(App)
 		expect(screen.getByTestId('rounding-order')).toBeTruthy()
 		for (const [tab, marker] of [
-			['Lay', 'Your GPS reads'], ['Line', 'Pin-end boat'], ['Wind', 'New reading'],
+			['Lay', 'Your GPS reads'], ['Line', 'Pin-end boat'], ['Wind', 'New reading'], ['Tide', 'Tide stick'],
 			['Change', 'Charlie board'], ['Brief', 'Briefing checklist'], ['Angles', 'Tide stick'], ['Plan', 'Size from the fleet'],
 		]) {
 			await fireEvent.click(screen.getByRole('button', { name: tab }))

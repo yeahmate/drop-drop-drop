@@ -5,7 +5,7 @@
  * read back is validated.
  */
 
-import type { CourseSpec, DistanceUnit, Vec, WindReading } from './geo'
+import { STATIONS, type CourseSpec, type DistanceUnit, type Vec, type WindReading } from './geo'
 import { decodeCourse, encodeCourse } from './share'
 
 const KEY = 'drop-drop-drop:v1'
@@ -22,10 +22,12 @@ export interface Saved {
 	warp: number
 	/** Briefing checklist ticks and notes. */
 	brief: Record<string, { done: boolean; note: string }>
+	/** Current: direction the water flows towards, and knots. */
+	tide: { set: number; rate: number }
 }
 
 export const EMPTY: Saved = {
-	spec: null, unit: 'nm', refLat: '', refLon: '', wind: [], laid: {}, depth: 10, warp: 20, brief: {},
+	spec: null, unit: 'nm', refLat: '', refLon: '', wind: [], laid: {}, depth: 10, warp: 20, brief: {}, tide: { set: 0, rate: 0 },
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
@@ -48,7 +50,11 @@ export function load(storage: StorageLike | undefined): Saved {
 			.filter((w): w is WindReading =>
 				!!w && finite(w.time) && finite(w.direction) && finite(w.speed)
 				&& w.direction >= 0 && w.direction < 360 && w.speed >= 0 && w.speed <= 100)
-			.map((w) => ({ time: w.time, direction: w.direction, speed: w.speed }))
+			.map((w) => ({
+				time: w.time, direction: w.direction, speed: w.speed,
+				...(typeof w.station === 'string' && (STATIONS as readonly string[]).includes(w.station) ? { station: w.station } : {}),
+				...(w.anchored === true ? { anchored: true } : {}),
+			}))
 			.slice(-200)
 		: []
 
@@ -58,6 +64,11 @@ export function load(storage: StorageLike | undefined): Saved {
 			if (/^[0-9A-Za-z]{1,4}$/.test(name) && p && finite(p.e) && finite(p.n)) laid[name] = { e: p.e, n: p.n }
 		}
 	}
+
+	const t = r.tide as { set?: unknown; rate?: unknown } | undefined
+	const tide = t && finite(t.set) && finite(t.rate) && t.set >= 0 && t.set < 360 && t.rate >= 0 && t.rate <= 15
+		? { set: t.set, rate: t.rate }
+		: { ...EMPTY.tide }
 
 	const brief: Saved['brief'] = {}
 	if (r.brief && typeof r.brief === 'object') {
@@ -78,6 +89,7 @@ export function load(storage: StorageLike | undefined): Saved {
 		depth: finite(r.depth) && r.depth > 0 && r.depth < 500 ? r.depth : EMPTY.depth,
 		warp: finite(r.warp) && r.warp > 0 && r.warp < 1000 ? r.warp : EMPTY.warp,
 		brief,
+		tide,
 	}
 }
 

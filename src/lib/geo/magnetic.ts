@@ -76,15 +76,18 @@ export function trueToCourse(v: Vec, variationDegrees: number): Vec {
 
 /**
  * Switch between magnetic and true without moving the course on the water:
- * the axis and logged wind directions are re-expressed in the new north.
+ * the axis, logged wind directions and the tide's set are re-expressed in
+ * the new north.
  */
 export function switchNorth<T extends { axis: number; north: North }>(
-	spec: T, wind: WindReading[], to: North, variationDegrees: number | null,
-): { spec: T; wind: WindReading[] } {
-	if (spec.north === to) return { spec, wind }
+	spec: T, wind: WindReading[], to: North, variationDegrees: number | null, tideSet = 0,
+): { spec: T; wind: WindReading[]; tideSet: number } {
+	if (spec.north === to) return { spec, wind, tideSet }
 	const shift = (to === 'true' ? 1 : -1) * (variationDegrees ?? 0)
+	const turn = (bearing: number) => Math.round(norm(bearing + shift)) % 360
 	return {
-		spec: { ...spec, north: to, axis: Math.round(norm(spec.axis + shift)) % 360 },
-		wind: wind.map((w) => ({ ...w, direction: Math.round(norm(w.direction + shift)) % 360 })),
+		spec: { ...spec, north: to, axis: turn(spec.axis) },
+		wind: wind.map((w) => ({ ...w, direction: turn(w.direction) })),
+		tideSet: turn(tideSet),
 	}
 }

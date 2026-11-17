@@ -12,6 +12,24 @@ export interface WindReading {
 	direction: number
 	/** Speed in knots. */
 	speed: number
+	/** Where it was taken, for example "Committee" or "Mark 1". */
+	station?: string
+	/**
+	 * Taken at anchor, so it is the wind over the ground. Readings without
+	 * this were taken drifting and are already the sailing wind.
+	 */
+	anchored?: boolean
+}
+
+/** Places a reading can come from. */
+export const STATIONS = ['Mark 1', 'Mark 2', 'Gate 3', 'Gate 4', 'Committee', 'Pin'] as const
+
+/**
+ * The committee boat reads the wind at anchor; mark boats read it while
+ * drifting. This is the default for a new reading and can be overridden.
+ */
+export function stationAnchored(station: string): boolean {
+	return station === 'Committee'
 }
 
 /** Signed difference a - b in the range -180 (exclusive) to 180. */

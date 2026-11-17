@@ -29,6 +29,8 @@ Working so far:
   boat anchors, and a tolerance check on the laid length.
 - **Wind**: log readings with large buttons; mean, range, skew from the axis
   with shift advice, and the VHF wording for the report.
+- **Tide**: tide stick calculator, the current along and across the course,
+  and the sailing wind with the bearings to square gates and the line to it.
 - **Change**: move the mark at the end of a leg. Gives the Charlie board
   display (bearing, green triangle or red rectangle, plus or minus), the
   mark boat's move, and whether the sailing instructions need a signal.
@@ -41,10 +43,10 @@ Working so far:
 - **Share course**: the whole course travels in the link.
 
 The course, reference point, wind log, laid marks and checklist are saved on
-the device. Add `#t=lay`, `#t=line`, `#t=wind`, `#t=change`, `#t=brief` or
+the device. Add `#t=lay`, `#t=line`, `#t=wind`, `#t=tide`, `#t=change`, `#t=brief` or
 `#t=calc` to open a tool directly.
 
-Not built yet: tide tools, class speed data for leg
+Not built yet: class speed data for leg
 times, a map layer, live sync between boats.
 
 ## Develop
@@ -73,6 +75,7 @@ start, stop, logs, update and rollback) are in [`deploy/`](deploy/README.md).
   - `calculator.ts`: course angle calculator pointers
   - `units.ts`: nautical miles and metres
   - `guidance.ts`, `startline.ts`, `wind.ts`: live guidance, start line and wind log sums
+  - `tide.ts`: tide stick, sailing wind, current along and across the course
   - `magnetic.ts`: magnetic variation and switching between magnetic and true
   - `change.ts`, `crew.ts`: course changes, mark boat assignments, equipment
 - `src/lib/share.ts` encodes a course into a link and validates it on the way in.

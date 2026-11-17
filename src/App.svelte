@@ -11,6 +11,7 @@
 	import LayView from './lib/ui/LayView.svelte'
 	import LineView from './lib/ui/LineView.svelte'
 	import PlanView from './lib/ui/PlanView.svelte'
+	import TideView from './lib/ui/TideView.svelte'
 	import WindView from './lib/ui/WindView.svelte'
 
 	const tabs = [
@@ -18,6 +19,7 @@
 		{ id: 'lay', name: 'Lay' },
 		{ id: 'line', name: 'Line' },
 		{ id: 'wind', name: 'Wind' },
+		{ id: 'tide', name: 'Tide' },
 		{ id: 'change', name: 'Change' },
 		{ id: 'brief', name: 'Brief' },
 		{ id: 'calc', name: 'Angles' },
@@ -39,6 +41,7 @@
 	let depth = $state(saved.depth)
 	let warp = $state(saved.warp)
 	let brief = $state(saved.brief)
+	let tide = $state(saved.tide)
 	let tab = $state<Tab>(tabs.find((t) => t.id === hashTab)?.id ?? (linked ? 'lay' : 'plan'))
 	let shared = $state('')
 
@@ -53,13 +56,14 @@
 
 	function setNorth(event: Event) {
 		const to = (event.currentTarget as HTMLSelectElement).value as North
-		const next = switchNorth($state.snapshot(spec) as CourseSpec, $state.snapshot(wind), to, variation)
+		const next = switchNorth($state.snapshot(spec) as CourseSpec, $state.snapshot(wind), to, variation, tide.set)
 		spec = next.spec
 		wind = next.wind
+		tide = { ...tide, set: next.tideSet }
 	}
 
 	$effect(() => {
-		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp, brief: $state.snapshot(brief) })
+		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp, brief: $state.snapshot(brief), tide: $state.snapshot(tide) })
 	})
 
 	async function share() {
@@ -120,7 +124,9 @@
 	{:else if tab === 'line'}
 		<LineView {spec} {unit} />
 	{:else if tab === 'wind'}
-		<WindView bind:spec bind:wind />
+		<WindView bind:spec bind:wind {tide} />
+	{:else if tab === 'tide'}
+		<TideView bind:spec {wind} bind:tide />
 	{:else if tab === 'change'}
 		<ChangeView bind:spec {unit} />
 	{:else if tab === 'brief'}
