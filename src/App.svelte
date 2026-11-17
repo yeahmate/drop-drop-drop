@@ -3,6 +3,8 @@
 	import { courseFromHash, shareUrl } from './lib/share'
 	import { deviceStorage, load, save } from './lib/store'
 	import AngleCalculator from './lib/ui/AngleCalculator.svelte'
+	import BriefView from './lib/ui/BriefView.svelte'
+	import ChangeView from './lib/ui/ChangeView.svelte'
 	import LayView from './lib/ui/LayView.svelte'
 	import LineView from './lib/ui/LineView.svelte'
 	import PlanView from './lib/ui/PlanView.svelte'
@@ -13,6 +15,8 @@
 		{ id: 'lay', name: 'Lay' },
 		{ id: 'line', name: 'Line' },
 		{ id: 'wind', name: 'Wind' },
+		{ id: 'change', name: 'Change' },
+		{ id: 'brief', name: 'Brief' },
 		{ id: 'calc', name: 'Angles' },
 	] as const
 	type Tab = (typeof tabs)[number]['id']
@@ -31,11 +35,12 @@
 	let laid = $state(linked ? {} : saved.laid)
 	let depth = $state(saved.depth)
 	let warp = $state(saved.warp)
+	let brief = $state(saved.brief)
 	let tab = $state<Tab>(tabs.find((t) => t.id === hashTab)?.id ?? (linked ? 'lay' : 'plan'))
 	let shared = $state('')
 
 	$effect(() => {
-		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp })
+		save(storage, { spec: $state.snapshot(spec), unit, refLat, refLon, wind: $state.snapshot(wind), laid: $state.snapshot(laid), depth, warp, brief: $state.snapshot(brief) })
 	})
 
 	async function share() {
@@ -78,6 +83,10 @@
 		<LineView {spec} {unit} />
 	{:else if tab === 'wind'}
 		<WindView bind:spec bind:wind />
+	{:else if tab === 'change'}
+		<ChangeView bind:spec {unit} />
+	{:else if tab === 'brief'}
+		<BriefView {spec} {unit} bind:brief />
 	{:else}
 		<div class="card">
 			<AngleCalculator bind:axis={spec.axis} bind:angle={spec.angle} />
@@ -105,6 +114,7 @@
 
 	nav {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 4px;
 		background: #1b3550;
 		padding: 4px;
@@ -117,7 +127,7 @@
 		font-size: 14px;
 		font-weight: 600;
 		min-height: 44px;
-		padding: 0 14px;
+		padding: 0 12px;
 		border-radius: 8px;
 		border: 0;
 	}

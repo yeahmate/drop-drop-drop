@@ -26,6 +26,12 @@ describe('units', () => {
 		expect(formatDistance(900, 'm')).toBe('900 m (0.49 NM)')
 		expect(nmToMetres(1)).toBe(1852)
 	})
+
+	it('gives short distances a third decimal', () => {
+		expect(formatDistance(42)).toBe('0.023 NM (42 m)')
+		expect(formatDistance(185)).toBe('0.100 NM (185 m)')
+		expect(formatDistance(186)).toBe('0.10 NM (186 m)')
+	})
 })
 
 describe('trapezoid, reference point system', () => {

@@ -15,8 +15,10 @@ export function metresToNm(metres: number): number {
 	return metres / METRES_PER_NM
 }
 
+/** Two decimals, or three under a tenth of a mile so gates and lines stay meaningful. */
 export function formatNm(metres: number): string {
-	return `${metresToNm(metres).toFixed(2)} NM`
+	const nm = metresToNm(metres)
+	return `${nm.toFixed(nm < 0.1 ? 3 : 2)} NM`
 }
 
 export function formatMetres(metres: number): string {

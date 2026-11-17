@@ -20,10 +20,12 @@ export interface Saved {
 	laid: Record<string, Vec>
 	depth: number
 	warp: number
+	/** Briefing checklist ticks and notes. */
+	brief: Record<string, { done: boolean; note: string }>
 }
 
 export const EMPTY: Saved = {
-	spec: null, unit: 'nm', refLat: '', refLon: '', wind: [], laid: {}, depth: 10, warp: 20,
+	spec: null, unit: 'nm', refLat: '', refLon: '', wind: [], laid: {}, depth: 10, warp: 20, brief: {},
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
@@ -57,6 +59,15 @@ export function load(storage: StorageLike | undefined): Saved {
 		}
 	}
 
+	const brief: Saved['brief'] = {}
+	if (r.brief && typeof r.brief === 'object') {
+		for (const [id, b] of Object.entries(r.brief as Record<string, { done?: unknown; note?: unknown }>)) {
+			if (/^[a-z]{1,20}$/.test(id) && b && typeof b === 'object') {
+				brief[id] = { done: b.done === true, note: text(b.note, 500) }
+			}
+		}
+	}
+
 	return {
 		spec: typeof r.spec === 'string' ? decodeCourse(r.spec) : null,
 		unit: r.unit === 'm' ? 'm' : 'nm',
@@ -66,6 +77,7 @@ export function load(storage: StorageLike | undefined): Saved {
 		laid,
 		depth: finite(r.depth) && r.depth > 0 && r.depth < 500 ? r.depth : EMPTY.depth,
 		warp: finite(r.warp) && r.warp > 0 && r.warp < 1000 ? r.warp : EMPTY.warp,
+		brief,
 	}
 }
 
