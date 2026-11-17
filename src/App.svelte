@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		DEFAULT_SPEC, formatVariation, parseCoordinate, switchNorth, variation as variationAt,
+		DEFAULT_SPEC, formatVariation, northLetter, parseCoordinate, switchNorth, variation as variationAt,
 		type CourseSpec, type North,
 	} from './lib/geo'
 	import { courseFromHash, shareUrl } from './lib/share'
@@ -44,6 +44,13 @@
 	let tide = $state(saved.tide)
 	let tab = $state<Tab>(tabs.find((t) => t.id === hashTab)?.id ?? (linked ? 'lay' : 'plan'))
 	let shared = $state('')
+	let settingsOpen = $state(false)
+
+	function choose(id: Tab, button: HTMLElement) {
+		tab = id
+		// The tab strip scrolls sideways on a phone; keep the chosen tab in view.
+		button.scrollIntoView?.({ inline: 'center', block: 'nearest' })
+	}
 
 	// Variation is worked out from the reference position and today's date.
 	const today = new Date()
@@ -79,42 +86,60 @@
 </script>
 
 <header>
-	<h1>Drop Drop Drop</h1>
+	<div class="bar">
+		<h1>Drop Drop Drop</h1>
+		<span class="grow"></span>
+		<button
+			type="button" class="chip" aria-expanded={settingsOpen} aria-controls="settings"
+			aria-label="Settings: bearings {spec.north}, distances {unit === 'nm' ? 'nautical miles' : 'metres'} first"
+			onclick={() => (settingsOpen = !settingsOpen)}
+		>°{northLetter(spec.north)} · {unit === 'nm' ? 'NM' : 'm'}</button>
+		<button type="button" class="share" onclick={share}>Share</button>
+	</div>
+
+	{#if settingsOpen}
+		<div class="settings" id="settings">
+			<label>
+				<span>Bearings</span>
+				<select value={spec.north} onchange={setNorth}>
+					<option value="magnetic">Magnetic</option>
+					<option value="true">True</option>
+				</select>
+			</label>
+			<label>
+				<span>Distances</span>
+				<select bind:value={unit}>
+					<option value="nm">NM first</option>
+					<option value="m">Metres first</option>
+				</select>
+			</label>
+			<p data-testid="variation">
+				{#if variation !== null}
+					Variation at the reference: {formatVariation(variation)}
+				{:else if reference}
+					The magnetic model has expired.
+				{:else if spec.north === 'magnetic'}
+					Bearings are magnetic. Set the reference position to apply variation to positions and GPS guidance.
+				{:else}
+					Bearings are true.
+				{/if}
+			</p>
+		</div>
+	{/if}
+
 	<nav aria-label="Tools">
 		{#each tabs as t (t.id)}
-			<button type="button" aria-pressed={tab === t.id} onclick={() => (tab = t.id)}>{t.name}</button>
+			<button type="button" aria-pressed={tab === t.id} onclick={(e) => choose(t.id, e.currentTarget)}>{t.name}</button>
 		{/each}
 	</nav>
-	<span class="grow"></span>
-	<label class="unit">
-		<span>Bearings</span>
-		<select value={spec.north} onchange={setNorth}>
-			<option value="magnetic">Magnetic</option>
-			<option value="true">True</option>
-		</select>
-	</label>
-	<label class="unit">
-		<span>Distances</span>
-		<select bind:value={unit}>
-			<option value="nm">NM first</option>
-			<option value="m">Metres first</option>
-		</select>
-	</label>
-	<button type="button" class="share" onclick={share}>Share course</button>
-	{#if shared}<span class="shared" role="status">{shared}</span>{/if}
 </header>
 
-<p class="variation" data-testid="variation">
-	{#if variation !== null}
-		Variation at the reference: {formatVariation(variation)}
-	{:else if reference}
+{#if shared}<p class="notice" role="status">{shared}</p>{/if}
+{#if reference && variation === null}
+	<p class="notice warn" role="alert">
 		The magnetic model has expired, so positions and GPS guidance treat magnetic as true. Update the app.
-	{:else if spec.north === 'magnetic'}
-		Bearings are magnetic. Set the reference position to apply variation to positions and GPS guidance.
-	{:else}
-		Bearings are true.
-	{/if}
-</p>
+	</p>
+{/if}
 
 <main>
 	{#if tab === 'plan'}
@@ -142,27 +167,28 @@
 	header {
 		background: var(--ink);
 		color: #fff;
-		padding: 10px 16px;
+		position: sticky;
+		top: 0;
+		z-index: 2;
+	}
+
+	.bar {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 12px;
+		gap: 8px;
+		padding: 8px 12px 4px;
 	}
 
 	h1 {
 		margin: 0;
-		font-size: 18px;
+		font-size: 16px;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
+		white-space: nowrap;
 	}
 
-	nav {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		background: #1b3550;
-		padding: 4px;
-		border-radius: 10px;
+	.grow {
+		flex: 1;
 	}
 
 	button,
@@ -176,26 +202,16 @@
 		border: 0;
 	}
 
-	nav button {
-		background: transparent;
+	.chip {
+		background: #1b3550;
 		color: #fff;
+		border: 1px solid #5b7590;
+		white-space: nowrap;
 	}
 
-	nav button[aria-pressed='true'] {
+	.chip[aria-expanded='true'] {
 		background: #fff;
 		color: var(--ink);
-	}
-
-	.grow {
-		flex: 1;
-	}
-
-	.unit {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 13px;
-		color: #c9d6e3;
 	}
 
 	.share {
@@ -203,16 +219,65 @@
 		color: var(--ink);
 	}
 
-	.shared {
-		font-size: 13px;
+	.settings {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 10px 16px;
+		padding: 8px 12px;
+		background: #1b3550;
 	}
 
-	.variation {
-		margin: 0;
-		padding: 6px 16px;
+	.settings label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		font-size: 13px;
-		background: #1b3550;
 		color: #c9d6e3;
+	}
+
+	.settings p {
+		margin: 0;
+		flex: 1 1 240px;
+		font-size: 13px;
+		color: #c9d6e3;
+	}
+
+	/* One row of tabs that scrolls sideways when it does not fit. */
+	nav {
+		display: flex;
+		gap: 4px;
+		padding: 4px 12px 8px;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	nav::-webkit-scrollbar {
+		display: none;
+	}
+
+	nav button {
+		background: #1b3550;
+		color: #fff;
+		flex: none;
+	}
+
+	nav button[aria-pressed='true'] {
+		background: #fff;
+		color: var(--ink);
+	}
+
+	.notice {
+		margin: 0;
+		padding: 8px 16px;
+		font-size: 14px;
+		font-weight: 600;
+		background: #dcfce7;
+	}
+
+	.notice.warn {
+		background: #fee2e2;
+		color: var(--warn);
 	}
 
 	main {
