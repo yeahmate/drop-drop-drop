@@ -5,9 +5,10 @@
 
 import { COURSE_TYPES, DEFAULT_SPEC, type CourseSpec, type CourseType } from './geo/library'
 
-const VERSION = 1
+// Version 2 added the north setting. Version 1 links are still read, as magnetic.
+const VERSION = 2
 
-type Limits = Record<Exclude<keyof CourseSpec, 'type'>, [min: number, max: number]>
+type Limits = Record<Exclude<keyof CourseSpec, 'type' | 'north'>, [min: number, max: number]>
 
 const LIMITS: Limits = {
 	beats: [1, 6],
@@ -38,7 +39,7 @@ function fromBase64Url(text: string): string {
 
 export function encodeCourse(spec: CourseSpec): string {
 	const values = KEYS.map((k) => Math.round(spec[k] * 1e5) / 1e5)
-	return toBase64Url(JSON.stringify([VERSION, spec.type, ...values]))
+	return toBase64Url(JSON.stringify([VERSION, spec.type, spec.north === 'true' ? 'T' : 'M', ...values]))
 }
 
 /** Returns null for anything that is not a valid, in-range course. */
@@ -49,13 +50,18 @@ export function decodeCourse(code: string): CourseSpec | null {
 	} catch {
 		return null
 	}
-	if (!Array.isArray(data) || data.length !== KEYS.length + 2 || data[0] !== VERSION) return null
+	if (!Array.isArray(data)) return null
+	const version = data[0]
+	if (version !== 1 && version !== VERSION) return null
+	const head = version === 1 ? 2 : 3
+	if (data.length !== KEYS.length + head) return null
 	const type = data[1] as CourseType
 	if (!COURSE_TYPES.some((c) => c.type === type)) return null
+	if (version !== 1 && data[2] !== 'M' && data[2] !== 'T') return null
 
-	const spec: CourseSpec = { ...DEFAULT_SPEC, type }
+	const spec: CourseSpec = { ...DEFAULT_SPEC, type, north: version !== 1 && data[2] === 'T' ? 'true' : 'magnetic' }
 	for (let i = 0; i < KEYS.length; i++) {
-		const value = data[i + 2]
+		const value = data[i + head]
 		const [min, max] = LIMITS[KEYS[i]]
 		if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) return null
 		spec[KEYS[i]] = value

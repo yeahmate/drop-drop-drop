@@ -7,6 +7,7 @@
  */
 
 import { ORIGIN, distanceBetween, offset, type Vec } from './bearing'
+import type { North } from './magnetic'
 import { nmToMetres } from './units'
 
 export type CourseType = 'L' | 'LA' | 'LR' | 'LRA' | 'I' | 'O' | 'IX' | 'OX'
@@ -24,6 +25,8 @@ export const COURSE_TYPES: readonly { type: CourseType; name: string }[] = [
 
 export interface CourseSpec {
 	type: CourseType
+	/** Which north the axis and every bearing are given in. */
+	north: North
 	/** Number of beats, the number in the course signal. */
 	beats: number
 	/** Course axis: bearing from the reference point to mark 1. */
@@ -56,6 +59,7 @@ export interface CourseSpec {
 
 export const DEFAULT_SPEC: CourseSpec = {
 	type: 'I',
+	north: 'magnetic',
 	beats: 2,
 	axis: 0,
 	beat: nmToMetres(0.5),

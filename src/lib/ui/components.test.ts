@@ -49,6 +49,25 @@ describe('PlanView', () => {
 		expect(cells('lay-1')[4]).toContain("W 002° 26.000'")
 	})
 
+	it('applies variation to positions for magnetic bearings but not for true', async () => {
+		// 0.9 NM on 000 magnetic with 10 degrees east variation is 010 true:
+		// 0.9 x cos(10) = 0.886 minutes north, and east of the reference.
+		const enter = async () => {
+			await fireEvent.input(screen.getByLabelText('Reference latitude'), { target: { value: "N 50° 35.000'" } })
+			await fireEvent.input(screen.getByLabelText('Reference longitude'), { target: { value: "W 002° 26.000'" } })
+		}
+		render(PlanView, { initial: { ...spec, axis: 0 }, variation: 10 })
+		await enter()
+		expect(cells('lay-1')[4]).toContain("N 50° 35.886'")
+		expect(cells('lay-1')[4]).toContain("W 002° 25.754'")
+		cleanup()
+
+		render(PlanView, { initial: { ...spec, axis: 0, north: 'true' }, variation: 10 })
+		await enter()
+		expect(cells('lay-1')[4]).toContain("N 50° 35.900'")
+		expect(cells('lay-1')[4]).toContain("W 002° 26.000'")
+	})
+
 	it('sizes the line and gate from the fleet', async () => {
 		render(PlanView, { initial: { ...spec } })
 		await fireEvent.input(screen.getByLabelText('Boats'), { target: { value: '42' } })

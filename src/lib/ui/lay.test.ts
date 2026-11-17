@@ -88,6 +88,27 @@ describe('LayView', () => {
 		expect(screen.queryByTestId('live')).toBeNull()
 	})
 
+	it('turns GPS positions into magnetic before guiding', async () => {
+		// With 10 degrees east variation the 235 magnetic line runs 245 true.
+		const gps = fakeGps()
+		render(LayView, { spec, refLat, refLon, variation: 10, gpsWatch: gps.gpsWatch })
+		await fireEvent.click(screen.getByText('Guide me with phone GPS'))
+		gps.send(fixAt(245, 760))
+		await tick()
+		expect(text('live')).toContain('140 m')
+		expect(text('live')).toContain('On the line')
+		expect(text('live')).toContain('now 055')
+
+		// The same fix read as true bearings would be well off the line.
+		cleanup()
+		const gps2 = fakeGps()
+		render(LayView, { spec: { ...spec, north: 'true' }, refLat, refLon, variation: 10, gpsWatch: gps2.gpsWatch })
+		await fireEvent.click(screen.getByText('Guide me with phone GPS'))
+		gps2.send(fixAt(245, 760))
+		await tick()
+		expect(text('live')).toContain('right of line, steer left')
+	})
+
 	it('explains a refused location permission', async () => {
 		const gps = fakeGps()
 		render(LayView, { spec, refLat, refLon, gpsWatch: gps.gpsWatch })

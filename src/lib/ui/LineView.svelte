@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		formatBearing, formatDistance, pinBoatAnchorBearings, startLine, startLineOk,
+		formatBearing, labelBearing, formatDistance, pinBoatAnchorBearings, startLine, startLineOk,
 		type CourseSpec, type DistanceUnit,
 	} from '../geo'
 
@@ -15,7 +15,7 @@
 
 <div class="line">
 	<section>
-		<h2>Start line · axis {formatBearing(spec.axis)}</h2>
+		<h2>Start line · axis {labelBearing(spec.axis, spec.north)}</h2>
 		<p class="length">{formatDistance(spec.startLine, unit)}</p>
 		<div class="bearings">
 			<div>

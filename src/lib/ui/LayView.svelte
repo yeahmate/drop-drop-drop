@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		LAY_TOLERANCE, buildCourse, distanceBetween, dropOffset, formatBearing, formatCoordinate,
+		LAY_TOLERANCE, appliedVariation, buildCourse, labelBearing, trueToCourse, distanceBetween, dropOffset, formatBearing, formatCoordinate,
 		formatDistance, fromLatLon, guide, layTable, leg, metresPerDegree, parseCoordinate, signal,
 		type CourseSpec, type DistanceUnit, type Vec,
 	} from '../geo'
@@ -9,7 +9,7 @@
 	let {
 		spec, unit = 'nm',
 		refLat = $bindable(''), refLon = $bindable(''),
-		laid = $bindable({}), depth = $bindable(10), warp = $bindable(20),
+		laid = $bindable({}), depth = $bindable(10), warp = $bindable(20), variation = null,
 		gpsWatch = watch, gpsPing = ping,
 	}: {
 		spec: CourseSpec
@@ -19,6 +19,8 @@
 		laid?: Record<string, Vec>
 		depth?: number
 		warp?: number
+		/** Magnetic variation at the reference, degrees east; null if unknown. */
+		variation?: number | null
 		gpsWatch?: typeof watch
 		gpsPing?: typeof ping
 	} = $props()
@@ -46,7 +48,9 @@
 	let originName = $derived(origins[from] && from !== row.mark ? from : 'Reference')
 	let instruction = $derived(leg(origin, row.position))
 	let anchorRun = $derived(dropOffset(depth, warp))
-	let boat = $derived(reference && fix ? fromLatLon(reference, fix.position) : null)
+	// GPS positions are true; turn them into the course's north.
+	let applied = $derived(appliedVariation(spec.north, variation))
+	let boat = $derived(reference && fix ? trueToCourse(fromLatLon(reference, fix.position), applied) : null)
 	let live = $derived(guiding && boat ? guide(origin, row.position, boat) : null)
 
 	function laidStatus(mark: string, planned: Vec): { text: string; ok: boolean } | null {
@@ -88,7 +92,7 @@
 		gpsError = null
 		try {
 			const f = fix ?? (await gpsPing())
-			laid = { ...laid, [row.mark]: fromLatLon(reference, f.position) }
+			laid = { ...laid, [row.mark]: trueToCourse(fromLatLon(reference, f.position), applied) }
 		} catch (e) {
 			gpsError = e as GpsError
 		}
@@ -99,7 +103,7 @@
 
 <div class="lay">
 	<section class="ref">
-		<h2>Reference point · {signal(spec)} axis {formatBearing(spec.axis)}</h2>
+		<h2>Reference point · {signal(spec)} axis {labelBearing(spec.axis, spec.north)}</h2>
 		<div class="pair">
 			<label>
 				Latitude
@@ -149,7 +153,7 @@
 			{@const status = laidStatus(row.mark, row.position)!}
 			<p class="status" class:ok={status.ok}>{status.text}</p>
 		{/if}
-		<p class="caption">From {originName.toLowerCase()}</p>
+		<p class="caption">From {originName.toLowerCase()} · {spec.north}</p>
 		<p class="huge" data-testid="bearing">{formatBearing(instruction.bearing)}</p>
 		<p class="large" data-testid="distance">{formatDistance(instruction.distance, unit)}</p>
 		<div class="gps" data-testid="gps-reads">

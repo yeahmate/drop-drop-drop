@@ -12,7 +12,7 @@ const text = (id: string) => screen.getByTestId(id).textContent?.replace(/\s+/g,
 describe('ChangeView', () => {
 	it('starts with no change', () => {
 		render(ChangeHarness, { initial: spec })
-		expect(text('current')).toBe('Now 235 · 900 m (0.49 NM)')
+		expect(text('current')).toBe('Now 235 · 900 m (0.49 NM) · magnetic')
 		expect(text('signal')).toBe('No change')
 	})
 
@@ -56,7 +56,7 @@ describe('ChangeView', () => {
 		render(ChangeHarness, { initial: spec })
 		await fireEvent.change(screen.getByLabelText('Mark to move'), { target: { value: '2' } })
 		await fireEvent.change(screen.getByLabelText('Leg starts at'), { target: { value: '1' } })
-		expect(text('current')).toBe('Now 125 · 600 m (0.32 NM)')
+		expect(text('current')).toBe('Now 125 · 600 m (0.32 NM) · magnetic')
 		expect(screen.queryByText('Re-point the whole course to this')).toBeNull()
 	})
 })

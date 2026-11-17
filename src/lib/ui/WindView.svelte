@@ -1,6 +1,6 @@
 <script lang="ts">
 	import {
-		angleDiff, formatBearing, norm, skewFromAxis, summarise, windReport,
+		angleDiff, formatBearing, labelBearing, norm, skewFromAxis, summarise, windReport,
 		type CourseSpec, type WindReading,
 	} from '../geo'
 
@@ -48,7 +48,7 @@
 
 <div class="wind">
 	<section>
-		<h2>Last {recent.length} readings · axis {formatBearing(spec.axis)}</h2>
+		<h2>Last {recent.length} readings · axis {labelBearing(spec.axis, spec.north)}</h2>
 		{#if summary && skew}
 			<div class="stats">
 				<div>
