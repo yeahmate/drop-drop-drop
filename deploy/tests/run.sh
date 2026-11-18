@@ -160,5 +160,33 @@ filled=$(sed -e 's|__DOMAIN__|marks.example.org|g' -e 's|__EMAIL__|you@example.o
 echo "$filled" | grep -q '__' && bad "no placeholders left after filling" || ok "no placeholders left after filling"
 [ "$(echo "$filled" | tr -cd '{' | wc -c)" = "$(echo "$filled" | tr -cd '}' | wc -c)" ] && ok "template braces balance" || bad "template braces balance"
 
+# --- shared server (install.sh --shared) ----------------------------------------
+block=$(echo "$filled" | site_block)
+echo "$block" | head -n 1 | grep -qx 'marks.example.org {' && ok "site block starts at the site" || bad "site block starts at the site"
+echo "$block" | grep -q 'email' && bad "site block has no global options" || ok "site block has no global options"
+echo "$block" | grep -qx $'\tlog' && ok "site block logs to the journal" || bad "site block logs to the journal"
+echo "$block" | grep -q 'output file' && bad "site block writes no log file" || ok "site block writes no log file"
+[ "$(echo "$block" | tr -cd '{' | wc -c)" = "$(echo "$block" | tr -cd '}' | wc -c)" ] && ok "site block braces balance" || bad "site block braces balance"
+
+SHARED_CONF="$WORK/shared.conf"
+mkdir -p "$WORK/sites"
+cat "$DDD_CONF" >"$SHARED_CONF"
+cat >>"$SHARED_CONF" <<CONF
+SHARED=1
+ACCESS_LOG=''
+SITE_FILE='$WORK/sites/drop-drop-drop.caddy'
+CONF
+echo "$block" >"$WORK/sites/drop-drop-drop.caddy"
+sctl() { DDD_CONF="$SHARED_CONF" "$DEPLOY/dddctl" "$@"; }
+out=$(sctl stop 2>&1)
+[ -f "$WORK/sites/drop-drop-drop.caddy.off" ] && [ ! -f "$WORK/sites/drop-drop-drop.caddy" ] && ok "shared stop switches the site off" || bad "shared stop switches the site off"
+echo "$out" | grep -q 'systemctl reload caddy' && ok "shared stop reloads Caddy, never stops it" || bad "shared stop reloads Caddy, never stops it"
+echo "$out" | grep -q 'systemctl stop' && bad "shared stop leaves Caddy running" || ok "shared stop leaves Caddy running"
+check "shared stop again is harmless" sctl stop
+check "shared start" sctl start
+[ -f "$WORK/sites/drop-drop-drop.caddy" ] && ok "shared start switches the site on" || bad "shared start switches the site on"
+sctl restart 2>&1 | grep -q 'systemctl reload caddy' && ok "shared restart reloads Caddy" || bad "shared restart reloads Caddy"
+refuse "harden refuses on a shared server" env DDD_CONF="$SHARED_CONF" "$DEPLOY/harden.sh" --dry-run
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

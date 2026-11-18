@@ -15,6 +15,12 @@ REPO_DIR=/opt/drop-drop-drop/repo
 WEB_ROOT=/var/www/drop-drop-drop
 SERVICE=caddy
 ACCESS_LOG=/var/log/caddy/drop-drop-drop.log
+# SHARED=1: the server's Caddyfile belongs to another project (install.sh
+# --shared). This site is then one file in /etc/caddy/sites, Caddy is reloaded
+# rather than restarted, and nothing server-wide is changed.
+SHARED=0
+SITES_DIR=/etc/caddy/sites
+SITE_FILE=$SITES_DIR/drop-drop-drop.caddy
 
 # shellcheck source=/dev/null
 [ -r "$CONF_FILE" ] && . "$CONF_FILE"
@@ -64,4 +70,17 @@ valid_email() {
 # Release names are made by dddctl: UTC timestamp, then the commit.
 valid_release() {
 	[[ "$1" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7,40}$ ]]
+}
+
+# The site block alone, for a shared server: the template without its global
+# options block (the server's own Caddyfile has those), logging to the journal
+# like the server's other sites. Reads the filled-in template on stdin.
+site_block() {
+	awk 'started || /^[^#{[:space:]][^[:space:]]* \{$/ { started = 1 } started' |
+		perl -0pe 's/\tlog \{\n.*?\n\t\}\n/\tlog\n/s'
+}
+
+# Is this site switched on in a shared server's Caddy?
+site_enabled() {
+	[ -f "$SITE_FILE" ]
 }

@@ -16,9 +16,9 @@ usage() {
 Usage: dddctl <command>
 
   status            Service state, live release and a check of the site
-  start             Start the web server
-  stop              Stop the web server
-  restart           Restart the web server
+  start             Start the web server (shared server: switch this site on)
+  stop              Stop the web server (shared server: switch this site off)
+  restart           Restart the web server (shared server: reload Caddy)
   logs [-f] [N]     Last N (default 50) lines of service and access logs; -f follows
   update [ref]      Fetch, test, build and switch to a branch, tag or commit
                     (default: $BRANCH). The live site is untouched if anything fails.
@@ -31,6 +31,38 @@ USAGE
 service() {
 	[ "$TEST_MODE" = 1 ] && { say "(test) systemctl $*"; return 0; }
 	systemctl "$@"
+}
+
+# On a shared server (install.sh --shared) Caddy also runs other projects'
+# sites, so start, stop and restart act on this site's file and reload Caddy
+# instead. A reload is graceful, and Caddy keeps its old config if the new one
+# doesn't load.
+shared_site() {
+	local action=$1
+	case "$action" in
+		stop)
+			if site_enabled; then
+				mv "$SITE_FILE" "$SITE_FILE.off"
+				if ! service reload "$SERVICE"; then
+					mv "$SITE_FILE.off" "$SITE_FILE"
+					die "Caddy wouldn't reload; the site is still on."
+				fi
+			fi
+			say "$DOMAIN is switched off (Caddy and the server's other sites carry on)" ;;
+		start)
+			if ! site_enabled; then
+				[ -f "$SITE_FILE.off" ] || die "No $SITE_FILE or $SITE_FILE.off. Run deploy/install.sh --shared."
+				mv "$SITE_FILE.off" "$SITE_FILE"
+				if ! service reload "$SERVICE"; then
+					mv "$SITE_FILE" "$SITE_FILE.off"
+					die "Caddy wouldn't reload with this site; it is still off."
+				fi
+			fi
+			say "$DOMAIN is switched on" ;;
+		restart)
+			service reload "$SERVICE"
+			say "$SERVICE reloaded" ;;
+	esac
 }
 
 current_release() {
@@ -143,6 +175,9 @@ cmd_check() {
 cmd_status() {
 	service --no-pager --lines=0 status "$SERVICE" || true
 	echo
+	if [ "$SHARED" = 1 ]; then
+		if site_enabled; then say "Shared server: site on ($SITE_FILE)"; else say "Shared server: site switched off (dddctl start)"; fi
+	fi
 	say "Live release: $(current_release || true)"
 	cmd_check || true
 }
@@ -157,6 +192,17 @@ cmd_logs() {
 		esac
 		shift
 	done
+	if [ -z "$ACCESS_LOG" ]; then
+		# Shared server: requests are in Caddy's journal with every other site's.
+		if [ "$follow" = 1 ]; then
+			say "Following requests for $DOMAIN (Ctrl-C to stop)"
+			journalctl -u "$SERVICE" -n 0 -f -o cat | grep --line-buffered -F "\"host\":\"$DOMAIN\""
+			return
+		fi
+		say "Requests for $DOMAIN (Caddy's journal)"
+		journalctl -u "$SERVICE" -o cat --no-pager -n 5000 | grep -F "\"host\":\"$DOMAIN\"" | tail -n "$lines" || true
+		return 0
+	fi
 	if [ "$follow" = 1 ]; then
 		say "Following $SERVICE (Ctrl-C to stop). Access log: $ACCESS_LOG"
 		exec journalctl -u "$SERVICE" -n "$lines" -f
@@ -175,7 +221,14 @@ main() {
 	[ $# -gt 0 ] && shift
 	case "$cmd" in
 		status) cmd_status ;;
-		start | stop | restart) need_root "$cmd"; service "$cmd" "$SERVICE"; say "$SERVICE: $cmd done" ;;
+		start | stop | restart)
+			need_root "$cmd"
+			if [ "$SHARED" = 1 ]; then
+				shared_site "$cmd"
+			else
+				service "$cmd" "$SERVICE"
+				say "$SERVICE: $cmd done"
+			fi ;;
 		logs) cmd_logs "$@" ;;
 		update) cmd_update "$@" ;;
 		rollback) cmd_rollback "$@" ;;

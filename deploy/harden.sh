@@ -26,6 +26,7 @@ done
 
 need_root "$@"
 need_rocky
+[ "$SHARED" = 1 ] && die "This server is shared (install.sh --shared): its own project looks after SSH, the firewall, fail2ban and Caddy. harden.sh would change them for every site, so it doesn't run here."
 
 # Run a command, or only print it with --dry-run.
 run() {
