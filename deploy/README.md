@@ -40,6 +40,33 @@ sudo deploy/harden.sh
 After hardening, open a **new** terminal and check you can still log in
 before closing the one you are in.
 
+## On a server shared with another project
+
+If another project already runs Caddy on the server (for example Pilot Gig
+Planner), install with `--shared` and **don't run `harden.sh`**: that server's
+own project looks after SSH, the firewall, fail2ban and Caddy, and
+`harden.sh` refuses to run there.
+
+```sh
+sudo deploy/install.sh --shared --domain marks.example.org --email you@example.org
+```
+
+With `--shared`, `install.sh`:
+
+- needs Caddy installed already, and the server's `/etc/caddy/Caddyfile` to end
+  with `import /etc/caddy/sites/*.caddy`. It never edits the Caddyfile.
+- writes this site as `/etc/caddy/sites/drop-drop-drop.caddy`, without the
+  template's global options. It checks the whole server's config with the new
+  file in place and takes the file out again if Caddy wouldn't load it.
+- **reloads** Caddy instead of restarting it, so the other sites stay up.
+- leaves the firewall alone, and logs requests to Caddy's journal like the
+  server's other sites, not to a file of its own.
+
+`dddctl` then acts on this site only: `stop` switches the site off (the file
+becomes `drop-drop-drop.caddy.off`) and reloads Caddy, `start` switches it back
+on, `restart` reloads Caddy, and `logs` picks this domain's requests out of
+Caddy's journal. `update` and `rollback` work as usual.
+
 ## Day to day
 
 ```sh

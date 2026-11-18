@@ -4,6 +4,10 @@
 # dddctl command. Safe to run again; it only changes what is not already set.
 #
 #   sudo deploy/install.sh --domain marks.example.org --email you@example.org
+#
+# On a server whose Caddy belongs to another project, add --shared: the site
+# becomes one file in /etc/caddy/sites, Caddy is reloaded rather than
+# restarted, and the Caddyfile and firewall are left alone.
 set -euo pipefail
 
 HERE=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
@@ -19,6 +23,9 @@ Usage: sudo deploy/install.sh --domain <name> --email <address> [options]
   --branch <name>    Branch to deploy (default: $BRANCH)
   --repo <url>       Git repository (default: $REPO_URL)
   --no-deploy        Set everything up but do not build and publish yet
+  --shared           Another project runs this server's Caddy: add this site
+                     as $SITE_FILE and change nothing
+                     server-wide (needs the Caddyfile to import $SITES_DIR/*.caddy)
 USAGE
 }
 
@@ -30,6 +37,7 @@ while [ $# -gt 0 ]; do
 		--branch) BRANCH=${2:-}; shift ;;
 		--repo) REPO_URL=${2:-}; shift ;;
 		--no-deploy) DEPLOY=0 ;;
+		--shared) SHARED=1 ;;
 		-h | --help) usage; exit 0 ;;
 		*) usage >&2; exit 2 ;;
 	esac
@@ -43,8 +51,20 @@ valid_email "$EMAIL" || die "Give a contact email for Let's Encrypt: --email you
 [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || die "Not a branch name: $BRANCH"
 [[ "$REPO_URL" =~ ^https://[A-Za-z0-9._/:-]+$ ]] || die "The repository must be an https:// URL."
 
+if [ "$SHARED" = 1 ]; then
+	command -v caddy >/dev/null || die "--shared needs Caddy already installed and running."
+	grep -Eq "^[[:space:]]*import[[:space:]]+$SITES_DIR/\*\.caddy" /etc/caddy/Caddyfile 2>/dev/null \
+		|| die "/etc/caddy/Caddyfile doesn't import $SITES_DIR/*.caddy. Update the project that owns it, or add that line at its end, then run this again."
+	# Only an access log of its own, in the journal; nothing else of Caddy's changes.
+	ACCESS_LOG=
+fi
+
 say "Installing packages"
-dnf -y install git curl tar policycoreutils firewalld 'dnf-command(copr)'
+if [ "$SHARED" = 1 ]; then
+	dnf -y install git curl tar policycoreutils
+else
+	dnf -y install git curl tar policycoreutils firewalld 'dnf-command(copr)'
+fi
 if ! command -v caddy >/dev/null; then
 	# Caddy's own repository, as its documentation gives for RHEL-family systems.
 	dnf -y copr enable @caddy/caddy
@@ -72,7 +92,7 @@ if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
 fi
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 750 /opt/drop-drop-drop
 install -d -o root -g root -m 755 "$WEB_ROOT" "$WEB_ROOT/releases"
-install -d -o caddy -g caddy -m 750 "$(dirname "$ACCESS_LOG")"
+[ -n "$ACCESS_LOG" ] && install -d -o caddy -g caddy -m 750 "$(dirname "$ACCESS_LOG")"
 
 if [ ! -d "$REPO_DIR/.git" ]; then
 	say "Cloning $REPO_URL"
@@ -91,6 +111,9 @@ REPO_URL='$REPO_URL'
 BRANCH='$BRANCH'
 # Releases kept on the server for rollback.
 KEEP=$KEEP
+# 1: another project owns this server's Caddy (install.sh --shared).
+SHARED=$SHARED
+ACCESS_LOG='$ACCESS_LOG'
 CONF
 
 say "Installing dddctl"
@@ -99,29 +122,56 @@ install -m 644 "$HERE/lib.sh" /usr/local/lib/drop-drop-drop/lib.sh
 install -m 755 "$HERE/dddctl" /usr/local/bin/dddctl
 
 say "Configuring Caddy for $DOMAIN"
-[ -f /etc/caddy/Caddyfile ] && [ ! -f /etc/caddy/Caddyfile.before-ddd ] \
-	&& cp -p /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-ddd
-sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__EMAIL__|$EMAIL|g" \
-	-e "s|__WEB_ROOT__|$WEB_ROOT|g" -e "s|__ACCESS_LOG__|$ACCESS_LOG|g" \
-	"$HERE/Caddyfile.template" >/etc/caddy/Caddyfile.new
-caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.new >/dev/null \
-	|| die "The generated Caddy configuration is invalid; left at /etc/caddy/Caddyfile.new."
-mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
-restorecon -R /etc/caddy "$WEB_ROOT" 2>/dev/null || true
+fill_template() {
+	sed -e "s|__DOMAIN__|$DOMAIN|g" -e "s|__EMAIL__|$EMAIL|g" \
+		-e "s|__WEB_ROOT__|$WEB_ROOT|g" -e "s|__ACCESS_LOG__|$ACCESS_LOG|g" \
+		"$HERE/Caddyfile.template"
+}
+if [ "$SHARED" = 1 ]; then
+	# Write the site's file, then check the whole server's config with it. If
+	# that fails, put back what was there, so the other sites are untouched.
+	install -d -m 755 "$SITES_DIR"
+	[ -f "$SITE_FILE" ] && cp -p "$SITE_FILE" "$SITE_FILE.before"
+	rm -f "$SITE_FILE.off"
+	fill_template | site_block >"$SITE_FILE"
+	chmod 644 "$SITE_FILE"
+	restorecon -R "$SITES_DIR" "$WEB_ROOT" 2>/dev/null || true
+	if ! runuser -u caddy -- caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile >/dev/null; then
+		if [ -f "$SITE_FILE.before" ]; then mv "$SITE_FILE.before" "$SITE_FILE"; else rm -f "$SITE_FILE"; fi
+		die "Caddy wouldn't load the config with this site; nothing was changed. See: caddy validate --config /etc/caddy/Caddyfile"
+	fi
+	rm -f "$SITE_FILE.before"
+else
+	[ -f /etc/caddy/Caddyfile ] && [ ! -f /etc/caddy/Caddyfile.before-ddd ] \
+		&& cp -p /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-ddd
+	fill_template >/etc/caddy/Caddyfile.new
+	caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile.new >/dev/null \
+		|| die "The generated Caddy configuration is invalid; left at /etc/caddy/Caddyfile.new."
+	mv /etc/caddy/Caddyfile.new /etc/caddy/Caddyfile
+	restorecon -R /etc/caddy "$WEB_ROOT" 2>/dev/null || true
 
-say "Opening the firewall for web traffic"
-systemctl enable --now firewalld
-firewall-cmd --quiet --permanent --add-service=http --add-service=https
-firewall-cmd --quiet --permanent --add-port=443/udp
-firewall-cmd --quiet --reload
+	say "Opening the firewall for web traffic"
+	systemctl enable --now firewalld
+	firewall-cmd --quiet --permanent --add-service=http --add-service=https
+	firewall-cmd --quiet --permanent --add-port=443/udp
+	firewall-cmd --quiet --reload
+fi
 
 if [ "$DEPLOY" = 1 ]; then
 	say "Building and publishing the first release"
 	DDD_SKIP_CHECK=1 /usr/local/bin/dddctl update "$BRANCH"
 fi
 
-systemctl enable caddy
-systemctl restart caddy
+if [ "$SHARED" = 1 ]; then
+	# A reload keeps the other sites up; Caddy keeps the old config if it fails.
+	systemctl reload caddy
+	NEXT="Don't run harden.sh here: the server's own project looks after SSH,
+the firewall and Caddy."
+else
+	systemctl enable caddy
+	systemctl restart caddy
+	NEXT="Next: sudo deploy/harden.sh"
+fi
 
 cat <<DONE
 
@@ -132,5 +182,5 @@ and needs ports 80 and 443 reachable from the internet.
   dddctl logs -f    watch the certificate being issued
   dddctl update     deploy the latest $BRANCH
 
-Next: sudo deploy/harden.sh
+$NEXT
 DONE
